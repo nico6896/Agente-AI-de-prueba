@@ -82,8 +82,12 @@ GYMAPP.app = (function () {
       return;
     }
 
+    if (tabId === "progreso") {
+      GYMAPP.progreso.render(contenido);
+      return;
+    }
+
     var titulos = {
-      progreso: "Progreso",
       nutricion: "Nutrición"
     };
     contenido.innerHTML =
