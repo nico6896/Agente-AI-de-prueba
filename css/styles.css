@@ -827,3 +827,26 @@ body {
   padding: 14px;
   font-size: 1rem;
 }
+
+/* Backup */
+.seccion-backup {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-borde);
+}
+
+.seccion-backup h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: var(--color-texto-secundario);
+}
+
+.backup-acciones {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.backup-acciones .btn-secundario {
+  flex: 1;
+}

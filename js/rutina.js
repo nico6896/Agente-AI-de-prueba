@@ -33,6 +33,21 @@ GYMAPP.rutina = (function () {
       '<datalist id="grupos-musculares">' +
       GRUPOS_MUSCULARES.map(function (g) { return '<option value="' + g + '"></option>'; }).join("") +
       "</datalist>" +
+      renderSeccionBackup() +
+      "</div>"
+    );
+  }
+
+  function renderSeccionBackup() {
+    return (
+      '<div class="seccion-backup">' +
+      "<h3>Copia de seguridad</h3>" +
+      '<p class="nota">Todos tus datos se guardan solo en este dispositivo. Exportalos para tener un respaldo o pasarlos a otro celular.</p>' +
+      '<div class="backup-acciones">' +
+      '<button type="button" data-accion="exportar-backup" class="btn btn-secundario">⬇️ Exportar datos</button>' +
+      '<button type="button" data-accion="importar-backup" class="btn btn-secundario">⬆️ Importar datos</button>' +
+      '<input type="file" id="input-backup" accept="application/json,.json" style="display:none" />' +
+      "</div>" +
       "</div>"
     );
   }
@@ -82,6 +97,10 @@ GYMAPP.rutina = (function () {
         borrarEjercicio(container, boton.dataset.diaId, boton.dataset.ejercicioId);
       } else if (accion === "importar-pdf") {
         container.querySelector("#input-pdf-rutina").click();
+      } else if (accion === "exportar-backup") {
+        exportarBackup();
+      } else if (accion === "importar-backup") {
+        container.querySelector("#input-backup").click();
       }
     });
 
@@ -90,6 +109,12 @@ GYMAPP.rutina = (function () {
         var file = ev.target.files[0];
         ev.target.value = "";
         if (file) manejarImportacionPdf(container, file);
+        return;
+      }
+      if (ev.target.id === "input-backup") {
+        var archivoBackup = ev.target.files[0];
+        ev.target.value = "";
+        if (archivoBackup) manejarImportacionBackup(container, archivoBackup);
         return;
       }
       actualizarCampo(ev.target);
@@ -189,6 +214,59 @@ GYMAPP.rutina = (function () {
       console.error("Error al importar PDF", err);
       mostrarMensaje(container, "Ocurrió un error al leer el PDF. Probá con otro archivo o cargá la rutina manualmente.", "error");
     });
+  }
+
+  function exportarBackup() {
+    var data = GYMAPP.storage.getData();
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var fecha = new Date().toISOString().slice(0, 10);
+
+    var enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = "gym-nutrition-backup-" + fecha + ".json";
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    URL.revokeObjectURL(url);
+  }
+
+  var CLAVES_BACKUP = ["usuario", "rutina", "sesiones_entrenamiento", "registros_nutricion", "base_alimentos", "medidas_corporales"];
+
+  function manejarImportacionBackup(container, file) {
+    var lector = new FileReader();
+
+    lector.onload = function () {
+      var datos;
+      try {
+        datos = JSON.parse(lector.result);
+      } catch (e) {
+        mostrarMensaje(container, "El archivo no es un JSON válido.", "error");
+        return;
+      }
+
+      var tieneFormatoValido = CLAVES_BACKUP.every(function (clave) {
+        return Object.prototype.hasOwnProperty.call(datos, clave);
+      });
+      if (!tieneFormatoValido) {
+        mostrarMensaje(container, "El archivo no tiene el formato esperado de un backup de esta app.", "error");
+        return;
+      }
+
+      if (!confirm("Esto reemplaza todos los datos actuales de la app (rutina, historial, nutrición) por los del archivo. ¿Continuar?")) {
+        return;
+      }
+
+      GYMAPP.storage.save(datos);
+      alert("Backup importado con éxito. La app se va a recargar.");
+      window.location.reload();
+    };
+
+    lector.onerror = function () {
+      mostrarMensaje(container, "No se pudo leer el archivo.", "error");
+    };
+
+    lector.readAsText(file);
   }
 
   return { render: render };
