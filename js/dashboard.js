@@ -30,7 +30,28 @@ GYMAPP.dashboard = (function () {
     return dias;
   }
 
+  /* Lunes=0 ... Domingo=6, a diferencia de Date#getDay() que arranca en domingo. */
+  function diaDeSemanaLunesPrimero(date) {
+    return (date.getDay() + 6) % 7;
+  }
+
   /* --- Cálculos --- */
+
+  function construirMapaDiasEntrenados(sesiones) {
+    var acumulado = {};
+    sesiones.forEach(function (s) {
+      var key = s.fecha.slice(0, 10);
+      if (!acumulado[key]) acumulado[key] = { gimnasio: false, futbol: false };
+      if (s.tipo === "gimnasio") acumulado[key].gimnasio = true;
+      if (s.tipo === "futbol") acumulado[key].futbol = true;
+    });
+    var resultado = {};
+    Object.keys(acumulado).forEach(function (key) {
+      var d = acumulado[key];
+      resultado[key] = d.gimnasio && d.futbol ? "ambos" : (d.gimnasio ? "gimnasio" : "futbol");
+    });
+    return resultado;
+  }
 
   function calcularResumenSemanal(data) {
     var dias7 = ultimosNDiasISO(7);
@@ -88,6 +109,7 @@ GYMAPP.dashboard = (function () {
 
     return (
       '<div class="pantalla pantalla-dashboard">' +
+      '<h1 class="saludo-dashboard">¡Hola, ' + esc(data.usuario.nombre) + "!</h1>" +
       "<h2>Tus metas diarias</h2>" +
       '<div class="tarjetas-macros">' +
       tarjeta(metas.calorias + " kcal", "Calorías") +
@@ -99,7 +121,8 @@ GYMAPP.dashboard = (function () {
       (gruposRepetidos
         ? '<div class="alerta-grupo-muscular">⚠️ Entrenaste ' + esc(gruposRepetidos.join(", ")) + " dos veces seguidas. Considerá variar el grupo muscular.</div>"
         : "") +
-      "<h3>Resumen semanal</h3>" +
+      "<h3>Esta semana</h3>" +
+      renderTiraSemana(data.sesiones_entrenamiento) +
       '<div class="tarjetas-macros">' +
       tarjeta(resumen.sesiones, resumen.sesiones === 1 ? "Sesión (últimos 7 días)" : "Sesiones (últimos 7 días)") +
       tarjeta(resumen.diasCerrados ? resumen.diasEnObjetivo + "/" + resumen.diasCerrados : "—", "Días en objetivo (nutrición)") +
@@ -119,6 +142,35 @@ GYMAPP.dashboard = (function () {
       "</div>" +
       "</div>"
     );
+  }
+
+  function renderTiraSemana(sesiones) {
+    var etiquetas = ["L", "M", "M", "J", "V", "S", "D"];
+    var mapaDias = construirMapaDiasEntrenados(sesiones);
+    var hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    var hoyIso = fechaISO(hoy);
+
+    var lunes = new Date(hoy);
+    lunes.setDate(lunes.getDate() - diaDeSemanaLunesPrimero(hoy));
+
+    var columnas = "";
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(lunes);
+      d.setDate(d.getDate() + i);
+      var key = fechaISO(d);
+      var estado = mapaDias[key] || null;
+      var clase = "calendario-dia" + (estado ? " " + estado : "") + (key === hoyIso ? " hoy" : "");
+
+      columnas += (
+        '<div class="tira-semana-col">' +
+        '<span class="tira-semana-letra">' + etiquetas[i] + "</span>" +
+        '<span class="' + clase + '">' + d.getDate() + "</span>" +
+        "</div>"
+      );
+    }
+
+    return '<div class="tira-semana">' + columnas + "</div>";
   }
 
   function tarjeta(valor, etiqueta) {

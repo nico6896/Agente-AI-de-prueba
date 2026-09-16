@@ -949,3 +949,27 @@ body {
 .backup-acciones .btn-secundario {
   flex: 1;
 }
+
+.saludo-dashboard {
+  font-size: 1.5rem;
+  margin: 0 0 16px;
+}
+
+.tira-semana {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.tira-semana-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.tira-semana-letra {
+  font-size: 0.68rem;
+  color: var(--color-texto-secundario);
+}
