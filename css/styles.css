@@ -6,11 +6,16 @@
   --color-texto: #f5f5f5;
   --color-texto-secundario: #a3a3a3;
   --color-borde: #2b2b2b;
-  --espaciado: 16px;
+  --espaciado: 14px;
+  --transicion-rapida: 120ms ease-out;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  font-size: 15px;
 }
 
 html,
@@ -27,28 +32,40 @@ body {
   min-height: 100vh;
 }
 
+@keyframes entrada-pantalla {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .pantalla {
   padding: var(--espaciado);
   padding-bottom: calc(72px + var(--espaciado));
+  animation: entrada-pantalla 180ms ease-out;
 }
 
 .pantalla h1 {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   margin-bottom: 4px;
 }
 
 .subtitulo {
   color: var(--color-texto-secundario);
   margin-top: 0;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 /* Onboarding */
 .campo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  gap: 5px;
+  margin-bottom: 12px;
 }
 
 .campo label {
@@ -61,10 +78,11 @@ body {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
-  padding: 14px;
+  padding: 11px;
   border-radius: 10px;
   font-size: 1rem;
   width: 100%;
+  transition: border-color var(--transicion-rapida);
 }
 
 .campo input:focus,
@@ -76,12 +94,17 @@ body {
 .btn {
   display: block;
   width: 100%;
-  padding: 16px;
+  padding: 13px;
   border-radius: 10px;
   border: none;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color var(--transicion-rapida), opacity var(--transicion-rapida);
+}
+
+.btn:active {
+  opacity: 0.8;
 }
 
 .btn-primario {
@@ -101,7 +124,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px var(--espaciado);
+  padding: 12px var(--espaciado);
   border-bottom: 1px solid var(--color-borde);
   font-weight: 600;
 }
@@ -109,10 +132,15 @@ body {
 .btn-icono {
   background: none;
   border: none;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   color: var(--color-texto);
   cursor: pointer;
   padding: 4px 8px;
+  transition: opacity var(--transicion-rapida);
+}
+
+.btn-icono:active {
+  opacity: 0.6;
 }
 
 .tab-content {
@@ -139,13 +167,14 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 10px 4px;
+  padding: 8px 4px;
   cursor: pointer;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  transition: color var(--transicion-rapida);
 }
 
 .nav-item .nav-icono {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
 }
 
 .nav-item.activo {
@@ -156,33 +185,33 @@ body {
 .tarjetas-macros {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .tarjeta-macro {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: 12px;
-  padding: 16px;
+  padding: 13px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .tarjeta-macro-valor {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   font-weight: 700;
 }
 
 .tarjeta-macro-nombre {
   color: var(--color-texto-secundario);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .nota {
   color: var(--color-texto-secundario);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
 .placeholder {
@@ -201,7 +230,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .rutina-header h2 {
@@ -217,18 +246,23 @@ body {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
-  padding: 10px 12px;
+  padding: 9px 11px;
   border-radius: 10px;
   font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
+  transition: opacity var(--transicion-rapida);
+}
+
+.btn-secundario:active {
+  opacity: 0.7;
 }
 
 .mensaje {
-  padding: 10px 12px;
+  padding: 9px 11px;
   border-radius: 10px;
   font-size: 0.85rem;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   border: 1px solid transparent;
 }
 
@@ -257,15 +291,15 @@ body {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
 }
 
 .dia-card-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 
 .input-nombre-dia {
@@ -274,9 +308,10 @@ body {
   border: none;
   border-bottom: 1px solid var(--color-borde);
   color: var(--color-texto);
-  font-size: 1.05rem;
+  font-size: 1.02rem;
   font-weight: 600;
-  padding: 6px 2px;
+  padding: 5px 2px;
+  transition: border-color var(--transicion-rapida);
 }
 
 .input-nombre-dia:focus {
@@ -287,15 +322,15 @@ body {
 .ejercicios-lista {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 7px;
+  margin-bottom: 9px;
 }
 
 .ejercicio-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  padding: 10px;
+  padding: 9px;
   background: var(--color-fondo);
   border: 1px solid var(--color-borde);
   border-radius: 10px;
@@ -307,8 +342,8 @@ body {
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
   border-radius: 8px;
-  padding: 8px;
-  font-size: 0.85rem;
+  padding: 7px;
+  font-size: 0.84rem;
   width: 100%;
 }
 
@@ -330,9 +365,14 @@ body {
   border: 1px dashed var(--color-borde);
   color: var(--color-texto-secundario);
   border-radius: 10px;
-  padding: 10px;
-  font-size: 0.85rem;
+  padding: 9px;
+  font-size: 0.84rem;
   cursor: pointer;
+  transition: opacity var(--transicion-rapida);
+}
+
+.btn-agregar-ejercicio:active {
+  opacity: 0.6;
 }
 
 .nota-dia {
@@ -343,19 +383,20 @@ body {
 .selector-tipo {
   display: flex;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .btn-tipo {
   flex: 1;
-  padding: 14px;
+  padding: 12px;
   border-radius: 10px;
   border: 1px solid var(--color-borde);
   background: var(--color-superficie);
   color: var(--color-texto-secundario);
-  font-size: 0.95rem;
+  font-size: 0.93rem;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color var(--transicion-rapida), color var(--transicion-rapida);
 }
 
 .btn-tipo.activo {
@@ -366,15 +407,15 @@ body {
 .ejercicios-entrenar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 16px 0;
+  gap: 10px;
+  margin: 14px 0;
 }
 
 .ejercicio-entrenar-card {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: 12px;
-  padding: 14px;
+  padding: 12px;
 }
 
 .ejercicio-entrenar-header {
@@ -386,22 +427,22 @@ body {
 }
 
 .ejercicio-objetivo {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-texto-secundario);
   white-space: nowrap;
 }
 
 .ejercicio-ultimo-registro {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-texto-secundario);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .series-lista {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 7px;
+  margin-bottom: 9px;
 }
 
 .serie-input-row {
@@ -411,10 +452,10 @@ body {
 }
 
 .serie-numero {
-  width: 20px;
+  width: 18px;
   text-align: center;
   color: var(--color-texto-secundario);
-  font-size: 0.85rem;
+  font-size: 0.83rem;
   flex-shrink: 0;
 }
 
@@ -430,8 +471,8 @@ body {
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
   border-radius: 10px;
-  padding: 14px 10px;
-  font-size: 1.1rem;
+  padding: 12px 9px;
+  font-size: 1.05rem;
   text-align: center;
 }
 
@@ -445,9 +486,14 @@ body {
   border: 1px dashed var(--color-borde);
   color: var(--color-texto-secundario);
   border-radius: 10px;
-  padding: 8px;
-  font-size: 0.8rem;
+  padding: 7px;
+  font-size: 0.78rem;
   cursor: pointer;
+  transition: opacity var(--transicion-rapida);
+}
+
+.btn-agregar-serie:active {
+  opacity: 0.6;
 }
 
 .futbol-form {
@@ -461,13 +507,14 @@ body {
 }
 
 .btn-rpe {
-  padding: 12px 0;
+  padding: 10px 0;
   border-radius: 8px;
   border: 1px solid var(--color-borde);
   background: var(--color-superficie);
   color: var(--color-texto-secundario);
-  font-size: 0.95rem;
+  font-size: 0.93rem;
   cursor: pointer;
+  transition: background-color var(--transicion-rapida), border-color var(--transicion-rapida), color var(--transicion-rapida);
 }
 
 .btn-rpe.activo {
@@ -481,27 +528,27 @@ body {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
-  padding: 12px;
+  padding: 10px;
   border-radius: 10px;
-  font-size: 0.95rem;
+  font-size: 0.93rem;
   font-family: inherit;
   resize: vertical;
 }
 
 /* Progreso */
 .pantalla-progreso h3 {
-  margin: 24px 0 10px;
-  font-size: 1rem;
+  margin: 18px 0 8px;
+  font-size: 0.98rem;
   color: var(--color-texto-secundario);
 }
 
 .metrica-selector {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .grafico-contenedor {
   position: relative;
-  height: 220px;
+  height: 210px;
   margin-bottom: 8px;
 }
 
@@ -509,16 +556,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 
 .calendario-mes-label {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.93rem;
 }
 
 .calendario-header .btn-icono {
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   line-height: 1;
   padding: 4px 12px;
 }
@@ -531,7 +578,7 @@ body {
 
 .calendario-dia-semana {
   text-align: center;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--color-texto-secundario);
   padding-bottom: 4px;
 }
@@ -544,7 +591,7 @@ body {
   border-radius: 8px;
   background: var(--color-borde);
   color: var(--color-texto-secundario);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .calendario-dia.vacio {
@@ -577,10 +624,10 @@ body {
 
 .heatmap-leyenda {
   display: flex;
-  gap: 14px;
-  margin-top: 12px;
+  gap: 12px;
+  margin-top: 10px;
   flex-wrap: wrap;
-  font-size: 0.75rem;
+  font-size: 0.73rem;
   color: var(--color-texto-secundario);
 }
 
@@ -591,33 +638,33 @@ body {
 }
 
 .heatmap-leyenda-swatch {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 3px;
   aspect-ratio: initial;
 }
 
 /* Nutrición */
 .pantalla-nutricion h3 {
-  margin: 24px 0 10px;
-  font-size: 1rem;
+  margin: 18px 0 8px;
+  font-size: 0.98rem;
   color: var(--color-texto-secundario);
 }
 
 .btn-ancho {
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 
 .resumen-nutricion {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 16px;
+  padding: 12px;
+  margin-bottom: 14px;
 }
 
 .fila-macro {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .fila-macro:last-of-type {
@@ -627,12 +674,12 @@ body {
 .fila-macro-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
-  margin-bottom: 6px;
+  font-size: 0.84rem;
+  margin-bottom: 5px;
 }
 
 .barra-macro-fondo {
-  height: 8px;
+  height: 7px;
   border-radius: 4px;
   background: var(--color-borde);
   overflow: hidden;
@@ -642,11 +689,12 @@ body {
   height: 100%;
   background: var(--color-primario);
   border-radius: 4px;
+  transition: width 200ms ease-out;
 }
 
 .nota-cumplimiento {
-  margin: 12px 0 0;
-  font-size: 0.85rem;
+  margin: 10px 0 0;
+  font-size: 0.84rem;
   font-weight: 600;
 }
 
@@ -662,22 +710,22 @@ body {
 .comidas-lista {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .comida-card {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: 12px;
-  padding: 14px;
+  padding: 12px;
 }
 
 .comida-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 
 .input-nombre-comida {
@@ -686,9 +734,10 @@ body {
   border: none;
   border-bottom: 1px solid var(--color-borde);
   color: var(--color-texto);
-  font-size: 1.05rem;
+  font-size: 1.02rem;
   font-weight: 600;
-  padding: 6px 2px;
+  padding: 5px 2px;
+  transition: border-color var(--transicion-rapida);
 }
 
 .input-nombre-comida:focus {
@@ -700,19 +749,19 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 
 .alimento-fila {
   display: grid;
-  grid-template-columns: 1fr 56px auto auto auto;
+  grid-template-columns: 1fr 52px auto auto auto;
   align-items: center;
   gap: 6px;
-  padding: 8px;
+  padding: 7px;
   background: var(--color-fondo);
   border: 1px solid var(--color-borde);
   border-radius: 10px;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
 }
 
 .alimento-nombre {
@@ -722,7 +771,7 @@ body {
 }
 
 .input-cantidad-alimento {
-  width: 56px;
+  width: 52px;
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
@@ -747,7 +796,7 @@ body {
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
   border-radius: 10px;
-  padding: 12px;
+  padding: 11px;
   font-size: 0.9rem;
 }
 
@@ -766,10 +815,15 @@ body {
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
   border-radius: 8px;
-  padding: 10px;
-  font-size: 0.85rem;
+  padding: 9px;
+  font-size: 0.84rem;
   text-align: left;
   cursor: pointer;
+  transition: opacity var(--transicion-rapida);
+}
+
+.resultado-alimento:active {
+  opacity: 0.6;
 }
 
 .resultado-alimento-kcal {
@@ -786,19 +840,24 @@ body {
   border: 1px dashed var(--color-borde);
   color: var(--color-texto-secundario);
   border-radius: 8px;
-  padding: 10px;
+  padding: 9px;
   font-size: 0.8rem;
   cursor: pointer;
+  transition: opacity var(--transicion-rapida);
+}
+
+.btn-crear-alimento:active {
+  opacity: 0.6;
 }
 
 .form-nuevo-alimento {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   background: var(--color-fondo);
   border: 1px solid var(--color-primario);
   border-radius: 10px;
-  padding: 10px;
+  padding: 9px;
 }
 
 .form-nuevo-alimento input {
@@ -806,8 +865,8 @@ body {
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
   border-radius: 8px;
-  padding: 10px;
-  font-size: 0.85rem;
+  padding: 9px;
+  font-size: 0.84rem;
 }
 
 .form-nuevo-alimento-macros {
@@ -827,8 +886,8 @@ body {
 
 /* Dashboard */
 .pantalla-dashboard h3 {
-  margin: 22px 0 10px;
-  font-size: 1rem;
+  margin: 18px 0 8px;
+  font-size: 0.98rem;
   color: var(--color-texto-secundario);
 }
 
@@ -837,17 +896,17 @@ body {
   border: 1px solid var(--color-primario);
   color: var(--color-primario);
   border-radius: 10px;
-  padding: 12px;
-  font-size: 0.85rem;
-  margin: 16px 0;
+  padding: 11px;
+  font-size: 0.84rem;
+  margin: 14px 0;
 }
 
 .proximo-dia-sugerido {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: 12px;
-  padding: 14px;
-  font-size: 1rem;
+  padding: 12px;
+  font-size: 0.98rem;
   font-weight: 600;
   margin: 0;
 }
@@ -855,8 +914,8 @@ body {
 .registro-peso-rapido {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 7px;
+  margin-top: 9px;
 }
 
 .registro-peso-rapido input {
@@ -864,27 +923,27 @@ body {
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
   border-radius: 10px;
-  padding: 14px;
-  font-size: 1rem;
+  padding: 12px;
+  font-size: 0.98rem;
 }
 
 /* Backup */
 .seccion-backup {
-  margin-top: 28px;
-  padding-top: 18px;
+  margin-top: 24px;
+  padding-top: 16px;
   border-top: 1px solid var(--color-borde);
 }
 
 .seccion-backup h3 {
   margin: 0 0 6px;
-  font-size: 1rem;
+  font-size: 0.98rem;
   color: var(--color-texto-secundario);
 }
 
 .backup-acciones {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 9px;
 }
 
 .backup-acciones .btn-secundario {

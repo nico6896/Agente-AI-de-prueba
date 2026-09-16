@@ -62,6 +62,7 @@ GYMAPP.app = (function () {
   function renderTab(tabId, data) {
     tabActual = tabId;
     var contenido = document.getElementById("tab-content");
+    window.scrollTo(0, 0);
 
     document.querySelectorAll(".nav-item").forEach(function (btn) {
       btn.classList.toggle("activo", btn.dataset.tab === tabId);
