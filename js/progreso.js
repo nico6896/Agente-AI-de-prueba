@@ -2,9 +2,9 @@
 var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 
 GYMAPP.progreso = (function () {
-  var SEMANAS_HEATMAP = 14;
+  var DIAS_SEMANA = ["L", "M", "M", "J", "V", "S", "D"];
 
-  var estado = { ejercicioId: "", metrica: "peso_maximo" };
+  var estado = { ejercicioId: "", metrica: "peso_maximo", mesActual: inicioDeMes(new Date()) };
 
   function render(container) {
     var data = GYMAPP.storage.getData();
@@ -73,7 +73,7 @@ GYMAPP.progreso = (function () {
       tarjetaRacha("Racha más larga", rachas.maxima) +
       "</div>" +
       "<h3>Calendario</h3>" +
-      renderHeatmap(data.sesiones_entrenamiento) +
+      renderCalendario(data.sesiones_entrenamiento) +
       "</div>"
     );
   }
@@ -94,38 +94,74 @@ GYMAPP.progreso = (function () {
     );
   }
 
-  /* --- Heatmap --- */
+  /* --- Calendario mensual --- */
 
-  function renderHeatmap(sesiones) {
-    var mapaDias = construirMapaDias(sesiones);
-    var hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+  function inicioDeMes(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
 
-    var totalDias = SEMANAS_HEATMAP * 7;
-    var primerDia = new Date(hoy);
-    primerDia.setDate(primerDia.getDate() - (totalDias - 1));
-    while (primerDia.getDay() !== 0) {
-      primerDia.setDate(primerDia.getDate() - 1);
-    }
+  /* Lunes=0 ... Domingo=6, a diferencia de Date#getDay() que arranca en domingo. */
+  function diaDeSemanaLunesPrimero(date) {
+    return (date.getDay() + 6) % 7;
+  }
+
+  function formatearMesLabel(date) {
+    var texto = date.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
+  function construirGrillaMes(mes) {
+    var primerDiaMes = new Date(mes.getFullYear(), mes.getMonth(), 1);
+    var ultimoDiaMes = new Date(mes.getFullYear(), mes.getMonth() + 1, 0);
+    var offsetInicio = diaDeSemanaLunesPrimero(primerDiaMes);
+    var offsetFin = (7 - (diaDeSemanaLunesPrimero(ultimoDiaMes) + 1)) % 7;
 
     var celdas = [];
-    var cursor = new Date(primerDia);
-    while (cursor <= hoy) {
-      var key = formatearFechaISO(cursor);
-      celdas.push({ fecha: new Date(cursor), estado: mapaDias[key] || null });
-      cursor.setDate(cursor.getDate() + 1);
-    }
+    for (var i = 0; i < offsetInicio; i++) celdas.push(null);
+    for (var d = 1; d <= ultimoDiaMes.getDate(); d++) celdas.push(new Date(mes.getFullYear(), mes.getMonth(), d));
+    for (var j = 0; j < offsetFin; j++) celdas.push(null);
+    return celdas;
+  }
+
+  function renderCalendario(sesiones) {
+    var mapaDias = construirMapaDias(sesiones);
+    var hoyIso = formatearFechaISO(new Date());
+    var celdas = construirGrillaMes(estado.mesActual);
 
     return (
-      '<div class="heatmap-scroll"><div class="heatmap-grid">' +
-      celdas.map(renderCeldaHeatmap).join("") +
-      "</div></div>" +
+      '<div class="calendario-header">' +
+      '<button type="button" data-accion="mes-anterior" class="btn-icono" aria-label="Mes anterior">‹</button>' +
+      '<span class="calendario-mes-label">' + formatearMesLabel(estado.mesActual) + "</span>" +
+      '<button type="button" data-accion="mes-siguiente" class="btn-icono" aria-label="Mes siguiente">›</button>' +
+      "</div>" +
+      '<div class="calendario-grid">' +
+      DIAS_SEMANA.map(function (d) { return '<span class="calendario-dia-semana">' + d + "</span>"; }).join("") +
+      celdas.map(function (fecha) { return renderCeldaCalendario(fecha, mapaDias, hoyIso); }).join("") +
+      "</div>" +
       '<div class="heatmap-leyenda">' +
       leyendaItem("", "Sin entrenar") +
       leyendaItem("gimnasio", "Gimnasio") +
       leyendaItem("futbol", "Fútbol") +
       leyendaItem("ambos", "Ambos") +
       "</div>"
+    );
+  }
+
+  function renderCeldaCalendario(fecha, mapaDias, hoyIso) {
+    if (!fecha) return '<span class="calendario-dia vacio"></span>';
+
+    var key = formatearFechaISO(fecha);
+    var estadoDia = mapaDias[key] || null;
+    var clase = estadoDia ? " " + estadoDia : "";
+    if (key === hoyIso) clase += " hoy";
+
+    var etiqueta = estadoDia ? etiquetaEstado(estadoDia) : "sin entrenamiento";
+    var titulo = formatearFechaLegible(fecha) + " · " + etiqueta;
+
+    return (
+      '<span class="calendario-dia' + clase + '" title="' + GYMAPP.util.escapeHtml(titulo) + '">' +
+      fecha.getDate() +
+      "</span>"
     );
   }
 
@@ -145,17 +181,10 @@ GYMAPP.progreso = (function () {
     return resultado;
   }
 
-  function renderCeldaHeatmap(celda) {
-    var clase = celda.estado ? " " + celda.estado : "";
-    var etiqueta = celda.estado ? etiquetaEstado(celda.estado) : "sin entrenamiento";
-    var titulo = formatearFechaLegible(celda.fecha) + " · " + etiqueta;
-    return '<span class="heatmap-celda' + clase + '" title="' + GYMAPP.util.escapeHtml(titulo) + '"></span>';
-  }
-
   function leyendaItem(tipo, etiqueta) {
     var clase = tipo ? " " + tipo : "";
     return (
-      '<span class="heatmap-leyenda-item"><span class="heatmap-leyenda-swatch heatmap-celda' + clase + '"></span>' +
+      '<span class="heatmap-leyenda-item"><span class="heatmap-leyenda-swatch calendario-dia' + clase + '"></span>' +
       etiqueta + "</span>"
     );
   }
@@ -273,9 +302,19 @@ GYMAPP.progreso = (function () {
     });
 
     container.addEventListener("click", function (ev) {
-      var boton = ev.target.closest('[data-accion="set-metrica"]');
+      var boton = ev.target.closest("[data-accion]");
       if (!boton) return;
-      estado.metrica = boton.dataset.metrica;
+      var accion = boton.dataset.accion;
+
+      if (accion === "set-metrica") {
+        estado.metrica = boton.dataset.metrica;
+      } else if (accion === "mes-anterior") {
+        estado.mesActual = new Date(estado.mesActual.getFullYear(), estado.mesActual.getMonth() - 1, 1);
+      } else if (accion === "mes-siguiente") {
+        estado.mesActual = new Date(estado.mesActual.getFullYear(), estado.mesActual.getMonth() + 1, 1);
+      } else {
+        return;
+      }
       render(container);
     });
   }

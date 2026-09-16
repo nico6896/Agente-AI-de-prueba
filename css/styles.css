@@ -505,36 +505,74 @@ body {
   margin-bottom: 8px;
 }
 
-.heatmap-scroll {
-  overflow-x: auto;
+.calendario-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.calendario-mes-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.calendario-header .btn-icono {
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 4px 12px;
+}
+
+.calendario-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendario-dia-semana {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--color-texto-secundario);
   padding-bottom: 4px;
 }
 
-.heatmap-grid {
-  display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(7, 13px);
-  gap: 3px;
-  width: max-content;
-}
-
-.heatmap-celda {
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
+.calendario-dia {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
   background: var(--color-borde);
+  color: var(--color-texto-secundario);
+  font-size: 0.8rem;
 }
 
-.heatmap-celda.gimnasio {
+.calendario-dia.vacio {
+  background: none;
+}
+
+.calendario-dia.hoy {
+  outline: 2px solid var(--color-texto);
+  outline-offset: 2px;
+}
+
+.calendario-dia.gimnasio {
   background: var(--color-primario);
+  color: #fff;
+  font-weight: 600;
 }
 
-.heatmap-celda.futbol {
+.calendario-dia.futbol {
   background: var(--color-texto);
+  color: #0a0a0a;
+  font-weight: 600;
 }
 
-.heatmap-celda.ambos {
-  background: linear-gradient(135deg, var(--color-primario) 50%, var(--color-texto) 50%);
+.calendario-dia.ambos {
+  background: var(--color-primario);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 2px var(--color-texto);
 }
 
 .heatmap-leyenda {
@@ -553,8 +591,10 @@ body {
 }
 
 .heatmap-leyenda-swatch {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  aspect-ratio: initial;
 }
 
 /* Nutrición */
