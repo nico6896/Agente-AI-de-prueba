@@ -9,6 +9,7 @@ GYMAPP.entrenamiento = (function () {
 
   function estadoInicial() {
     return {
+      fecha: fechaHoyISO(),
       tipo: "gimnasio",
       diaRutinaId: "",
       seriesPorEjercicio: {},
@@ -17,6 +18,11 @@ GYMAPP.entrenamiento = (function () {
       notas: "",
       futbol: { tipo: "entrenamiento", posicion: "", minutos_jugados: "" }
     };
+  }
+
+  function fechaHoyISO() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
   function render(container) {
@@ -55,11 +61,21 @@ GYMAPP.entrenamiento = (function () {
     return (
       '<div class="pantalla pantalla-entrenar">' +
       "<h2>Entrenar</h2>" +
+      renderFecha(estado) +
       renderSelectorTipo(estado) +
       '<div id="entrenar-mensaje" class="mensaje oculto"></div>' +
       (estado.tipo === "gimnasio" ? renderGimnasio(data, estado) : renderFutbol(estado)) +
       renderComun(estado) +
       '<button type="button" data-accion="guardar-sesion" class="btn btn-primario">Guardar sesión</button>' +
+      "</div>"
+    );
+  }
+
+  function renderFecha(estado) {
+    return (
+      '<div class="campo">' +
+      '<label for="input-fecha-sesion">Fecha</label>' +
+      '<input type="date" id="input-fecha-sesion" value="' + estado.fecha + '" max="' + fechaHoyISO() + '" />' +
       "</div>"
     );
   }
@@ -229,6 +245,8 @@ GYMAPP.entrenamiento = (function () {
         render(container);
       } else if (ev.target.id === "select-futbol-tipo") {
         estado.futbol.tipo = ev.target.value;
+      } else if (ev.target.id === "input-fecha-sesion") {
+        estado.fecha = ev.target.value;
       }
     });
 
@@ -274,7 +292,24 @@ GYMAPP.entrenamiento = (function () {
     return resultado;
   }
 
+  function construirFechaSesion(fechaSeleccionada) {
+    if (fechaSeleccionada === fechaHoyISO()) {
+      return new Date().toISOString();
+    }
+    return new Date(fechaSeleccionada + "T12:00:00").toISOString();
+  }
+
   function guardarSesion(container) {
+    if (!estado.fecha) {
+      mostrarMensaje(container, "Elegí la fecha de la sesión.", "error");
+      return;
+    }
+
+    if (estado.fecha > fechaHoyISO()) {
+      mostrarMensaje(container, "No podés cargar una sesión con fecha futura.", "error");
+      return;
+    }
+
     if (!estado.rpe) {
       mostrarMensaje(container, "Seleccioná el RPE de la sesión antes de guardar.", "error");
       return;
@@ -288,7 +323,7 @@ GYMAPP.entrenamiento = (function () {
 
     var sesion = {
       id: GYMAPP.util.generarId(),
-      fecha: new Date().toISOString(),
+      fecha: construirFechaSesion(estado.fecha),
       tipo: estado.tipo,
       dia_rutina_id: null,
       duracion_min: duracion,
