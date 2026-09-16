@@ -193,3 +193,144 @@ body {
   min-height: 60vh;
   color: var(--color-texto-secundario);
 }
+
+/* Rutina */
+.rutina-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.rutina-header h2 {
+  margin: 0;
+}
+
+.rutina-acciones {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-secundario {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rutina-mensaje {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+.rutina-mensaje.oculto {
+  display: none;
+}
+
+.rutina-mensaje.info {
+  background: rgba(96, 165, 250, 0.15);
+  color: #93c5fd;
+}
+
+.rutina-mensaje.exito {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--color-primario);
+}
+
+.rutina-mensaje.error {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.dia-card {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.dia-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.input-nombre-dia {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 6px 2px;
+}
+
+.input-nombre-dia:focus {
+  outline: none;
+  border-color: var(--color-primario);
+}
+
+.ejercicios-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ejercicio-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 10px;
+  background: var(--color-fondo);
+  border: 1px solid var(--color-borde);
+  border-radius: 10px;
+  position: relative;
+}
+
+.ejercicio-row input {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.input-ejercicio-nombre {
+  grid-column: 1 / -1;
+}
+
+.ejercicio-row .btn-borrar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+}
+
+.btn-agregar-ejercicio {
+  width: 100%;
+  background: none;
+  border: 1px dashed var(--color-borde);
+  color: var(--color-texto-secundario);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.nota-dia {
+  margin: 0 0 8px;
+}

@@ -28,7 +28,7 @@ GYMAPP.app = (function () {
     root().innerHTML =
       '<div class="app-shell">' +
       '<header class="app-header">' +
-      "<span>Hola, " + escapeHtml(data.usuario.nombre) + "</span>" +
+      "<span>Hola, " + GYMAPP.util.escapeHtml(data.usuario.nombre) + "</span>" +
       '<button id="btn-rutina" class="btn-icono" title="Rutina" aria-label="Rutina">⚙️</button>' +
       "</header>" +
       '<main id="tab-content" class="tab-content"></main>' +
@@ -72,11 +72,15 @@ GYMAPP.app = (function () {
       return;
     }
 
+    if (tabId === "rutina") {
+      GYMAPP.rutina.render(contenido);
+      return;
+    }
+
     var titulos = {
       entrenar: "Entrenar",
       progreso: "Progreso",
-      nutricion: "Nutrición",
-      rutina: "Rutina"
+      nutricion: "Nutrición"
     };
     contenido.innerHTML =
       '<div class="pantalla placeholder">' +
@@ -108,12 +112,6 @@ GYMAPP.app = (function () {
       '<span class="tarjeta-macro-nombre">' + nombre + "</span>" +
       "</div>"
     );
-  }
-
-  function escapeHtml(str) {
-    var div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
   }
 
   return { iniciar: iniciar };
