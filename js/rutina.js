@@ -117,11 +117,13 @@ GYMAPP.rutina = (function () {
         if (archivoBackup) manejarImportacionBackup(container, archivoBackup);
         return;
       }
-      actualizarCampo(ev.target);
+      actualizarCampo(container, ev.target);
     });
   }
 
-  function actualizarCampo(input) {
+  var MENSAJE_ERROR_GUARDADO = "No se pudo guardar el cambio. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.";
+
+  function actualizarCampo(container, input) {
     var campo = input.dataset.campo;
     if (!campo) return;
     var filaEjercicio = input.closest("[data-ejercicio-id]");
@@ -130,7 +132,7 @@ GYMAPP.rutina = (function () {
     var diaId = tarjetaDia.dataset.diaId;
     var ejercicioId = filaEjercicio ? filaEjercicio.dataset.ejercicioId : null;
 
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       var dia = data.rutina.dias.find(function (d) { return d.id === diaId; });
       if (!dia) return;
       if (ejercicioId) {
@@ -140,30 +142,42 @@ GYMAPP.rutina = (function () {
       } else {
         dia[campo] = input.value;
       }
-    });
+    }, { alertaAutomatica: false });
+
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+    }
   }
 
   function agregarDia(container) {
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       data.rutina.dias.push({
         id: GYMAPP.util.generarId(),
         nombre: "Día " + (data.rutina.dias.length + 1),
         ejercicios: []
       });
-    });
+    }, { alertaAutomatica: false });
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+      return;
+    }
     render(container);
   }
 
   function borrarDia(container, diaId) {
     if (!confirm("¿Borrar este día de la rutina? El historial de sesiones ya guardadas no se ve afectado.")) return;
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       data.rutina.dias = data.rutina.dias.filter(function (d) { return d.id !== diaId; });
-    });
+    }, { alertaAutomatica: false });
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+      return;
+    }
     render(container);
   }
 
   function agregarEjercicio(container, diaId) {
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       var dia = data.rutina.dias.find(function (d) { return d.id === diaId; });
       if (!dia) return;
       dia.ejercicios.push({
@@ -173,16 +187,24 @@ GYMAPP.rutina = (function () {
         series_objetivo: 3,
         reps_objetivo: "10"
       });
-    });
+    }, { alertaAutomatica: false });
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+      return;
+    }
     render(container);
   }
 
   function borrarEjercicio(container, diaId, ejercicioId) {
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       var dia = data.rutina.dias.find(function (d) { return d.id === diaId; });
       if (!dia) return;
       dia.ejercicios = dia.ejercicios.filter(function (e) { return e.id !== ejercicioId; });
-    });
+    }, { alertaAutomatica: false });
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+      return;
+    }
     render(container);
   }
 
@@ -200,9 +222,13 @@ GYMAPP.rutina = (function () {
         mostrarMensaje(container, "No se pudo reconocer ningún ejercicio en el PDF. Cargá los días manualmente.", "error");
         return;
       }
-      GYMAPP.storage.updateData(function (data) {
+      var resultado = GYMAPP.storage.updateData(function (data) {
         data.rutina.dias = data.rutina.dias.concat(diasImportados);
-      });
+      }, { alertaAutomatica: false });
+      if (!resultado.guardado) {
+        mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+        return;
+      }
       var totalEjercicios = diasImportados.reduce(function (acc, d) { return acc + d.ejercicios.length; }, 0);
       render(container);
       mostrarMensaje(
@@ -257,7 +283,11 @@ GYMAPP.rutina = (function () {
         return;
       }
 
-      GYMAPP.storage.save(datos);
+      var guardado = GYMAPP.storage.save(datos, { alertaAutomatica: false });
+      if (!guardado) {
+        mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+        return;
+      }
       alert("Backup importado con éxito. La app se va a recargar.");
       window.location.reload();
     };

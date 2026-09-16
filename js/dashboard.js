@@ -213,7 +213,7 @@ GYMAPP.dashboard = (function () {
     var cintura = parseFloat(cinturaInput.value);
     var fecha = fechaISO(new Date());
 
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       var existente = data.medidas_corporales.filter(function (m) { return m.fecha === fecha; })[0];
       if (existente) {
         existente.peso_kg = peso;
@@ -221,7 +221,11 @@ GYMAPP.dashboard = (function () {
       } else {
         data.medidas_corporales.push({ fecha: fecha, peso_kg: peso, cintura_cm: isNaN(cintura) ? null : cintura });
       }
-    });
+    }, { alertaAutomatica: false });
+    if (!resultado.guardado) {
+      mostrarMensaje(container, "No se pudo guardar la medida. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.", "error");
+      return;
+    }
 
     render(container);
     mostrarMensaje(container, "Medida guardada.", "exito");

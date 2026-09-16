@@ -360,9 +360,13 @@ GYMAPP.entrenamiento = (function () {
       };
     }
 
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       data.sesiones_entrenamiento.push(sesion);
-    });
+    }, { alertaAutomatica: false });
+    if (!resultado.guardado) {
+      mostrarMensaje(container, "No se pudo guardar la sesión. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.", "error");
+      return;
+    }
 
     estado = estadoInicial();
     render(container);

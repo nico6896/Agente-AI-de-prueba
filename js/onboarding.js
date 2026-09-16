@@ -86,9 +86,14 @@ GYMAPP.onboarding = (function () {
 
     usuario.metas_macros = GYMAPP.calculos.calcularMetasMacros(usuario);
 
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       data.usuario = usuario;
-    });
+    }, { alertaAutomatica: false });
+
+    if (!resultado.guardado) {
+      alert("No se pudo guardar tu perfil. Es posible que no haya espacio disponible en el dispositivo. Volvé a intentarlo.");
+      return;
+    }
 
     GYMAPP.app.iniciar();
   }

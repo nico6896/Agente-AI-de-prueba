@@ -55,9 +55,12 @@ GYMAPP.nutricion = (function () {
     return totales;
   }
 
-  /* Crea el registro de hoy si no existe, aplica `mutador(registro, data)` y recalcula los totales. */
-  function mutarRegistroHoy(mutador) {
-    GYMAPP.storage.updateData(function (data) {
+  var MENSAJE_ERROR_GUARDADO = "No se pudo guardar el cambio. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.";
+
+  /* Crea el registro de hoy si no existe, aplica `mutador(registro, data)` y recalcula los totales.
+     Devuelve true si se guardó correctamente; si falla, avisa al usuario y devuelve false. */
+  function mutarRegistroHoy(container, mutador) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       var fecha = fechaHoyISO();
       var registro = data.registros_nutricion.filter(function (r) { return r.fecha === fecha; })[0];
       if (!registro) {
@@ -66,7 +69,12 @@ GYMAPP.nutricion = (function () {
       }
       mutador(registro, data);
       registro.totales_calculados = calcularTotales(registro, data.base_alimentos);
-    });
+    }, { alertaAutomatica: false });
+
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+    }
+    return resultado.guardado;
   }
 
   function calcularCumplimiento(caloriasReales, caloriasObjetivo) {
@@ -244,30 +252,33 @@ GYMAPP.nutricion = (function () {
   /* --- Acciones --- */
 
   function agregarComida(container) {
-    mutarRegistroHoy(function (registro) {
+    var exito = mutarRegistroHoy(container, function (registro) {
       registro.comidas.push({ nombre: "Comida " + (registro.comidas.length + 1), alimentos: [] });
     });
+    if (!exito) return;
     render(container);
   }
 
   function borrarComida(container, indice) {
     if (!confirm("¿Borrar esta comida y sus alimentos?")) return;
-    mutarRegistroHoy(function (registro) {
+    var exito = mutarRegistroHoy(container, function (registro) {
       registro.comidas.splice(parseInt(indice, 10), 1);
     });
+    if (!exito) return;
     render(container);
   }
 
-  function agregarAlimentoAComida(comidaIndex, alimentoId) {
-    mutarRegistroHoy(function (registro) {
+  function agregarAlimentoAComida(container, comidaIndex, alimentoId) {
+    return mutarRegistroHoy(container, function (registro) {
       registro.comidas[parseInt(comidaIndex, 10)].alimentos.push({ alimento_id: alimentoId, cantidad_g: 100 });
     });
   }
 
   function borrarAlimentoDeComida(container, comidaIndex, alimentoIndex) {
-    mutarRegistroHoy(function (registro) {
+    var exito = mutarRegistroHoy(container, function (registro) {
       registro.comidas[parseInt(comidaIndex, 10)].alimentos.splice(parseInt(alimentoIndex, 10), 1);
     });
+    if (!exito) return;
     render(container);
   }
 
@@ -290,11 +301,16 @@ GYMAPP.nutricion = (function () {
       macros_100g: { calorias: kcal, proteinas_g: prot, carbos_g: carbos, grasas_g: grasas }
     };
 
-    GYMAPP.storage.updateData(function (data) {
+    var resultado = GYMAPP.storage.updateData(function (data) {
       data.base_alimentos.push(nuevoAlimento);
-    });
+    }, { alertaAutomatica: false });
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+      return;
+    }
 
-    agregarAlimentoAComida(comidaIndex, nuevoAlimento.id);
+    if (!agregarAlimentoAComida(container, comidaIndex, nuevoAlimento.id)) return;
+
     estado.formularioNuevo[comidaIndex] = false;
     estado.busquedas[comidaIndex] = "";
     render(container);
@@ -308,9 +324,10 @@ GYMAPP.nutricion = (function () {
       mostrarMensaje(container, "Cargá al menos una comida antes de cerrar el día.", "error");
       return;
     }
-    mutarRegistroHoy(function (r, d) {
+    var exito = mutarRegistroHoy(container, function (r, d) {
       r.cumplimiento = calcularCumplimiento(r.totales_calculados.calorias, d.usuario.metas_macros.calorias);
     });
+    if (!exito) return;
     render(container);
     mostrarMensaje(container, "Día cerrado.", "exito");
   }
@@ -331,9 +348,10 @@ GYMAPP.nutricion = (function () {
 
   /* Persiste la cantidad y refresca solo el kcal de la fila y el resumen de macros, sin re-renderizar todo. */
   function actualizarCantidadAlimento(container, comidaIndex, alimentoIndex, cantidad) {
-    mutarRegistroHoy(function (registro) {
+    var exito = mutarRegistroHoy(container, function (registro) {
       registro.comidas[parseInt(comidaIndex, 10)].alimentos[parseInt(alimentoIndex, 10)].cantidad_g = cantidad;
     });
+    if (!exito) return;
 
     var data = GYMAPP.storage.getData();
     var registro = buscarRegistroHoy(data);
@@ -391,7 +409,7 @@ GYMAPP.nutricion = (function () {
       } else if (accion === "borrar-alimento") {
         borrarAlimentoDeComida(container, boton.dataset.comidaIndex, boton.dataset.alimentoIndex);
       } else if (accion === "agregar-alimento") {
-        agregarAlimentoAComida(boton.dataset.comidaIndex, boton.dataset.alimentoId);
+        if (!agregarAlimentoAComida(container, boton.dataset.comidaIndex, boton.dataset.alimentoId)) return;
         estado.busquedas[boton.dataset.comidaIndex] = "";
         render(container);
       } else if (accion === "mostrar-form-nuevo-alimento") {
@@ -422,7 +440,7 @@ GYMAPP.nutricion = (function () {
       if (target.classList.contains("input-nombre-comida")) {
         var tarjetaComida = target.closest("[data-comida-index]");
         var idxComida = tarjetaComida.dataset.comidaIndex;
-        mutarRegistroHoy(function (registro) {
+        mutarRegistroHoy(container, function (registro) {
           registro.comidas[parseInt(idxComida, 10)].nombre = target.value;
         });
         return;
