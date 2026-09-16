@@ -68,7 +68,7 @@ GYMAPP.app = (function () {
     });
 
     if (tabId === "dashboard") {
-      contenido.innerHTML = renderDashboard(data);
+      GYMAPP.dashboard.render(contenido);
       return;
     }
 
@@ -91,31 +91,6 @@ GYMAPP.app = (function () {
       GYMAPP.nutricion.render(contenido);
       return;
     }
-  }
-
-  function renderDashboard(data) {
-    var m = data.usuario.metas_macros;
-    return (
-      '<div class="pantalla">' +
-      "<h2>Tus metas diarias</h2>" +
-      '<div class="tarjetas-macros">' +
-      tarjetaMacro("Calorías", m.calorias, "kcal") +
-      tarjetaMacro("Proteínas", m.proteinas_g, "g") +
-      tarjetaMacro("Carbohidratos", m.carbos_g, "g") +
-      tarjetaMacro("Grasas", m.grasas_g, "g") +
-      "</div>" +
-      '<p class="nota">Todavía no hay sesiones ni registros cargados.</p>' +
-      "</div>"
-    );
-  }
-
-  function tarjetaMacro(nombre, valor, unidad) {
-    return (
-      '<div class="tarjeta-macro">' +
-      '<span class="tarjeta-macro-valor">' + valor + " " + unidad + "</span>" +
-      '<span class="tarjeta-macro-nombre">' + nombre + "</span>" +
-      "</div>"
-    );
   }
 
   return { iniciar: iniciar };
