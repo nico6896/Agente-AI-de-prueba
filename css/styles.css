@@ -1,0 +1,195 @@
+:root {
+  --color-fondo: #0f1115;
+  --color-superficie: #1a1d24;
+  --color-primario: #4ade80;
+  --color-texto: #f2f2f2;
+  --color-texto-secundario: #9ca3af;
+  --color-borde: #2a2e37;
+  --espaciado: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#app-root {
+  min-height: 100vh;
+}
+
+.pantalla {
+  padding: var(--espaciado);
+  padding-bottom: calc(72px + var(--espaciado));
+}
+
+.pantalla h1 {
+  font-size: 1.5rem;
+  margin-bottom: 4px;
+}
+
+.subtitulo {
+  color: var(--color-texto-secundario);
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+/* Onboarding */
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.campo label {
+  font-size: 0.85rem;
+  color: var(--color-texto-secundario);
+}
+
+.campo input,
+.campo select {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 1rem;
+  width: 100%;
+}
+
+.campo input:focus,
+.campo select:focus {
+  outline: none;
+  border-color: var(--color-primario);
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  border-radius: 10px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primario {
+  background: var(--color-primario);
+  color: #0f1115;
+  margin-top: 8px;
+}
+
+/* Shell / nav */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px var(--espaciado);
+  border-bottom: 1px solid var(--color-borde);
+  font-weight: 600;
+}
+
+.btn-icono {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--color-texto);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.tab-content {
+  flex: 1;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--color-superficie);
+  border-top: 1px solid var(--color-borde);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.nav-item {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--color-texto-secundario);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.nav-item .nav-icono {
+  font-size: 1.3rem;
+}
+
+.nav-item.activo {
+  color: var(--color-primario);
+}
+
+/* Dashboard */
+.tarjetas-macros {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.tarjeta-macro {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tarjeta-macro-valor {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.tarjeta-macro-nombre {
+  color: var(--color-texto-secundario);
+  font-size: 0.8rem;
+}
+
+.nota {
+  color: var(--color-texto-secundario);
+  font-size: 0.9rem;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 60vh;
+  color: var(--color-texto-secundario);
+}
