@@ -556,3 +556,231 @@ body {
   width: 10px;
   height: 10px;
 }
+
+/* Nutrición */
+.pantalla-nutricion h3 {
+  margin: 24px 0 10px;
+  font-size: 1rem;
+  color: var(--color-texto-secundario);
+}
+
+.btn-ancho {
+  margin-bottom: 10px;
+}
+
+.resumen-nutricion {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.fila-macro {
+  margin-bottom: 12px;
+}
+
+.fila-macro:last-of-type {
+  margin-bottom: 0;
+}
+
+.fila-macro-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.barra-macro-fondo {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-borde);
+  overflow: hidden;
+}
+
+.barra-macro-relleno {
+  height: 100%;
+  background: var(--color-primario);
+  border-radius: 4px;
+}
+
+.nota-cumplimiento {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.cumplimiento-en_objetivo {
+  color: var(--color-primario);
+}
+
+.cumplimiento-por_debajo,
+.cumplimiento-por_encima {
+  color: var(--color-texto-secundario);
+}
+
+.comidas-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.comida-card {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.comida-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.input-nombre-comida {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 6px 2px;
+}
+
+.input-nombre-comida:focus {
+  outline: none;
+  border-color: var(--color-primario);
+}
+
+.alimentos-comida-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.alimento-fila {
+  display: grid;
+  grid-template-columns: 1fr 56px auto auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: var(--color-fondo);
+  border: 1px solid var(--color-borde);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.alimento-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.input-cantidad-alimento {
+  width: 56px;
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  border-radius: 8px;
+  padding: 6px;
+  text-align: center;
+}
+
+.alimento-unidad,
+.alimento-kcal {
+  color: var(--color-texto-secundario);
+  white-space: nowrap;
+}
+
+.buscador-alimento {
+  position: relative;
+}
+
+.input-buscar-alimento {
+  width: 100%;
+  background: var(--color-fondo);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.9rem;
+}
+
+.resultados-alimento {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resultado-alimento {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--color-fondo);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resultado-alimento-kcal {
+  color: var(--color-texto-secundario);
+  white-space: nowrap;
+}
+
+.nota-busqueda {
+  font-size: 0.8rem;
+}
+
+.btn-crear-alimento {
+  background: none;
+  border: 1px dashed var(--color-borde);
+  color: var(--color-texto-secundario);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.form-nuevo-alimento {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--color-fondo);
+  border: 1px solid var(--color-primario);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.form-nuevo-alimento input {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.85rem;
+}
+
+.form-nuevo-alimento-macros {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.form-nuevo-alimento-acciones {
+  display: flex;
+  gap: 8px;
+}
+
+.form-nuevo-alimento-acciones .btn {
+  margin-top: 0;
+}

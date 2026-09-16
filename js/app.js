@@ -87,14 +87,10 @@ GYMAPP.app = (function () {
       return;
     }
 
-    var titulos = {
-      nutricion: "Nutrición"
-    };
-    contenido.innerHTML =
-      '<div class="pantalla placeholder">' +
-      "<h2>" + titulos[tabId] + "</h2>" +
-      "<p>Próximamente.</p>" +
-      "</div>";
+    if (tabId === "nutricion") {
+      GYMAPP.nutricion.render(contenido);
+      return;
+    }
   }
 
   function renderDashboard(data) {
