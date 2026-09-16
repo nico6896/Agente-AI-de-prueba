@@ -99,4 +99,5 @@ GYMAPP.app = (function () {
 
 document.addEventListener("DOMContentLoaded", function () {
   GYMAPP.app.iniciar();
+  if (GYMAPP.auth) GYMAPP.auth.inicializar();
 });

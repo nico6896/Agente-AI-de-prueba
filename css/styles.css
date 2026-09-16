@@ -935,6 +935,19 @@ body {
   font-size: 0.98rem;
 }
 
+/* Cuenta (auth opcional) */
+.seccion-cuenta {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-borde);
+}
+
+.seccion-cuenta h3 {
+  margin: 0 0 6px;
+  font-size: 0.98rem;
+  color: var(--color-texto-secundario);
+}
+
 /* Backup */
 .seccion-backup {
   margin-top: 24px;

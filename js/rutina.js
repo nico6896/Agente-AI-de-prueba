@@ -33,6 +33,7 @@ GYMAPP.rutina = (function () {
       '<datalist id="grupos-musculares">' +
       GRUPOS_MUSCULARES.map(function (g) { return '<option value="' + g + '"></option>'; }).join("") +
       "</datalist>" +
+      (GYMAPP.auth ? GYMAPP.auth.renderSeccionCuenta() : "") +
       renderSeccionBackup() +
       "</div>"
     );
@@ -119,6 +120,19 @@ GYMAPP.rutina = (function () {
       }
       actualizarCampo(container, ev.target);
     });
+
+    if (GYMAPP.auth) {
+      GYMAPP.auth.bindEventosCuenta(container, function () {
+        render(container);
+      });
+      /* Solo re-renderizamos si la pantalla de Rutina sigue siendo la que
+         está visible: si el usuario está en otra pestaña cuando cambia el
+         estado de sesión (ej. una renovación de token en segundo plano), no
+         queremos pisar el contenido de esa pestaña. */
+      GYMAPP.auth.suscribirCambiosSesion(function () {
+        if (container.querySelector(".pantalla-rutina")) render(container);
+      });
+    }
   }
 
   var MENSAJE_ERROR_GUARDADO = "No se pudo guardar el cambio. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.";
