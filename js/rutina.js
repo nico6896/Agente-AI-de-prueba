@@ -28,7 +28,7 @@ GYMAPP.rutina = (function () {
       '<button type="button" data-accion="nuevo-dia" class="btn btn-secundario">+ Nuevo día</button>' +
       "</div>" +
       "</div>" +
-      '<div id="rutina-mensaje" class="rutina-mensaje oculto"></div>' +
+      '<div id="rutina-mensaje" class="mensaje oculto"></div>' +
       '<div class="rutina-dias">' + listaDias + "</div>" +
       '<datalist id="grupos-musculares">' +
       GRUPOS_MUSCULARES.map(function (g) { return '<option value="' + g + '"></option>'; }).join("") +
@@ -165,7 +165,7 @@ GYMAPP.rutina = (function () {
     var el = container.querySelector("#rutina-mensaje");
     if (!el) return;
     el.textContent = texto;
-    el.className = "rutina-mensaje " + (tipo || "info");
+    el.className = "mensaje " + (tipo || "info");
   }
 
   function manejarImportacionPdf(container, file) {

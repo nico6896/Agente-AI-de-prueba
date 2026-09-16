@@ -77,8 +77,12 @@ GYMAPP.app = (function () {
       return;
     }
 
+    if (tabId === "entrenar") {
+      GYMAPP.entrenamiento.render(contenido);
+      return;
+    }
+
     var titulos = {
-      entrenar: "Entrenar",
       progreso: "Progreso",
       nutricion: "Nutrición"
     };
