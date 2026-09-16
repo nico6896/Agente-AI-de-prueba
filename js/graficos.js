@@ -2,6 +2,11 @@
 var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 
 GYMAPP.graficos = (function () {
+  var COLOR_PRIMARIO = "#e31b23";
+  var COLOR_PRIMARIO_FONDO = "rgba(227, 27, 35, 0.15)";
+  var COLOR_TEXTO_SECUNDARIO = "#a3a3a3";
+  var COLOR_BORDE = "#2b2b2b";
+
   function destruirSiExiste(canvas) {
     var existente = window.Chart.getChart(canvas);
     if (existente) existente.destroy();
@@ -16,20 +21,20 @@ GYMAPP.graficos = (function () {
         datasets: [{
           label: etiqueta,
           data: valores,
-          borderColor: "#4ade80",
-          backgroundColor: "rgba(74, 222, 128, 0.15)",
+          borderColor: COLOR_PRIMARIO,
+          backgroundColor: COLOR_PRIMARIO_FONDO,
           tension: 0.25,
           fill: true,
           pointRadius: 3,
-          pointBackgroundColor: "#4ade80"
+          pointBackgroundColor: COLOR_PRIMARIO
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { ticks: { color: "#9ca3af" }, grid: { color: "#2a2e37" } },
-          y: { ticks: { color: "#9ca3af" }, grid: { color: "#2a2e37" } }
+          x: { ticks: { color: COLOR_TEXTO_SECUNDARIO }, grid: { color: COLOR_BORDE } },
+          y: { ticks: { color: COLOR_TEXTO_SECUNDARIO }, grid: { color: COLOR_BORDE } }
         },
         plugins: {
           legend: { display: false }
@@ -47,11 +52,11 @@ GYMAPP.graficos = (function () {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { ticks: { color: "#9ca3af" }, grid: { display: false } },
-          y: { ticks: { color: "#9ca3af" }, grid: { color: "#2a2e37" } }
+          x: { ticks: { color: COLOR_TEXTO_SECUNDARIO }, grid: { display: false } },
+          y: { ticks: { color: COLOR_TEXTO_SECUNDARIO }, grid: { color: COLOR_BORDE } }
         },
         plugins: {
-          legend: { labels: { color: "#9ca3af" } }
+          legend: { labels: { color: COLOR_TEXTO_SECUNDARIO } }
         }
       }
     });

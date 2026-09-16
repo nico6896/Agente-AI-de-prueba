@@ -1,10 +1,11 @@
 :root {
-  --color-fondo: #0f1115;
-  --color-superficie: #1a1d24;
-  --color-primario: #4ade80;
-  --color-texto: #f2f2f2;
-  --color-texto-secundario: #9ca3af;
-  --color-borde: #2a2e37;
+  --color-fondo: #0a0a0a;
+  --color-superficie: #181818;
+  --color-primario: #e31b23;
+  --color-primario-contraste: #fff5f5;
+  --color-texto: #f5f5f5;
+  --color-texto-secundario: #a3a3a3;
+  --color-borde: #2b2b2b;
   --espaciado: 16px;
 }
 
@@ -85,7 +86,7 @@ body {
 
 .btn-primario {
   background: var(--color-primario);
-  color: #0f1115;
+  color: var(--color-primario-contraste);
   margin-top: 8px;
 }
 
@@ -228,6 +229,7 @@ body {
   border-radius: 10px;
   font-size: 0.85rem;
   margin-bottom: 16px;
+  border: 1px solid transparent;
 }
 
 .mensaje.oculto {
@@ -235,18 +237,20 @@ body {
 }
 
 .mensaje.info {
-  background: rgba(96, 165, 250, 0.15);
-  color: #93c5fd;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-borde);
+  color: var(--color-texto-secundario);
 }
 
 .mensaje.exito {
-  background: rgba(74, 222, 128, 0.15);
-  color: var(--color-primario);
+  background: var(--color-primario);
+  color: var(--color-primario-contraste);
 }
 
 .mensaje.error {
-  background: rgba(248, 113, 113, 0.15);
-  color: #f87171;
+  background: rgba(227, 27, 35, 0.12);
+  border-color: var(--color-primario);
+  color: var(--color-primario);
 }
 
 .dia-card {
@@ -469,7 +473,7 @@ body {
 .btn-rpe.activo {
   background: var(--color-primario);
   border-color: var(--color-primario);
-  color: #0f1115;
+  color: var(--color-primario-contraste);
   font-weight: 700;
 }
 
@@ -526,11 +530,11 @@ body {
 }
 
 .heatmap-celda.futbol {
-  background: #60a5fa;
+  background: var(--color-texto);
 }
 
 .heatmap-celda.ambos {
-  background: #facc15;
+  background: linear-gradient(135deg, var(--color-primario) 50%, var(--color-texto) 50%);
 }
 
 .heatmap-leyenda {
