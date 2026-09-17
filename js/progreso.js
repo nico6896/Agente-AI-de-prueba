@@ -40,40 +40,101 @@ GYMAPP.progreso = (function () {
     return Object.keys(mapa).map(function (id) { return { id: id, nombre: mapa[id] }; });
   }
 
-  /* --- Templates --- */
+  /* --- Templates ---
+     Layout: resumen general -> evolución por ejercicio (con protagonismo) ->
+     calendario -> historial accesible. En pantallas angostas todo se apila
+     en ese orden; en tablet/desktop, evolución queda en una columna ancha y
+     calendario+historial en una columna lateral (ver .progreso-layout en
+     styles.css). */
 
   function template(data, opciones, rachas) {
-    var selectorEjercicio = opciones.length
-      ? '<div class="campo"><label for="select-progreso-ejercicio">Ejercicio</label>' +
-        '<select id="select-progreso-ejercicio">' +
-        opciones.map(function (o) {
-          return '<option value="' + o.id + '"' + (o.id === estado.ejercicioId ? " selected" : "") + ">" +
-            GYMAPP.util.escapeHtml(o.nombre) + "</option>";
-        }).join("") +
-        "</select></div>"
-      : '<p class="nota">Todavía no hay ejercicios en tu rutina ni en tu historial.</p>';
-
-    var seccionGrafico = opciones.length
-      ? '<div class="selector-tipo metrica-selector">' +
-        botonMetrica("peso_maximo", "Peso máximo") +
-        botonMetrica("volumen_total", "Volumen total") +
-        "</div>" +
-        '<div class="grafico-contenedor"><canvas id="grafico-progreso"></canvas></div>' +
-        '<p id="progreso-grafico-nota" class="nota oculto"></p>'
-      : "";
+    var sesiones = data.sesiones_entrenamiento;
 
     return (
       '<div class="pantalla pantalla-progreso">' +
       "<h2>Progreso</h2>" +
-      selectorEjercicio +
-      seccionGrafico +
-      "<h3>Racha de entrenamientos</h3>" +
-      '<div class="tarjetas-macros">' +
-      tarjetaRacha("Racha actual", rachas.actual) +
-      tarjetaRacha("Racha más larga", rachas.maxima) +
+      renderResumenGeneral(sesiones, rachas) +
+      '<div class="progreso-layout">' +
+      '<div class="progreso-columna-principal">' +
+      renderSeccionEvolucion(opciones) +
       "</div>" +
-      "<h3>Calendario</h3>" +
-      renderCalendario(data.sesiones_entrenamiento) +
+      '<div class="progreso-columna-lateral">' +
+      renderSeccionCalendario(sesiones) +
+      renderSeccionHistorialAccesible(sesiones) +
+      "</div>" +
+      "</div>" +
+      "</div>"
+    );
+  }
+
+  /* --- Resumen general ---
+     Cuatro cifras separadas a propósito (ver comentario de "Rachas" más
+     abajo): días activos y sesiones totales son conteos distintos, nunca se
+     mezclan entre sí ni con las rachas. */
+  function renderResumenGeneral(sesiones, rachas) {
+    var diasActivos = obtenerDiasActivosOrdenados(sesiones).length;
+
+    return (
+      '<div class="tarjetas-macros progreso-resumen">' +
+      tarjetaResumen(diasActivos, diasActivos === 1 ? "Día activo" : "Días activos") +
+      tarjetaResumen(sesiones.length, sesiones.length === 1 ? "Sesión total" : "Sesiones totales") +
+      tarjetaResumen(rachas.actual, "Racha actual (días)") +
+      tarjetaResumen(rachas.maxima, "Racha máxima (días)") +
+      "</div>"
+    );
+  }
+
+  function tarjetaResumen(valor, etiqueta) {
+    return (
+      '<div class="tarjeta-macro">' +
+      '<span class="tarjeta-macro-valor">' + valor + "</span>" +
+      '<span class="tarjeta-macro-nombre">' + etiqueta + "</span>" +
+      "</div>"
+    );
+  }
+
+  /* --- Evolución por ejercicio --- */
+
+  function renderSeccionEvolucion(opciones) {
+    if (!opciones.length) {
+      return (
+        '<div class="progreso-panel">' +
+        "<h3>Evolución por ejercicio</h3>" +
+        '<p class="nota">Todavía no hay ejercicios en tu rutina ni en tu historial.</p>' +
+        "</div>"
+      );
+    }
+
+    var selectorEjercicio =
+      '<div class="campo"><label for="select-progreso-ejercicio">Ejercicio</label>' +
+      '<select id="select-progreso-ejercicio">' +
+      opciones.map(function (o) {
+        return '<option value="' + o.id + '"' + (o.id === estado.ejercicioId ? " selected" : "") + ">" +
+          GYMAPP.util.escapeHtml(o.nombre) + "</option>";
+      }).join("") +
+      "</select></div>";
+
+    return (
+      '<div class="progreso-panel progreso-evolucion">' +
+      "<h3>Evolución por ejercicio</h3>" +
+      selectorEjercicio +
+      '<div class="selector-tipo metrica-selector">' +
+      botonMetrica("peso_maximo", "Peso máximo") +
+      botonMetrica("repeticiones", "Repeticiones") +
+      botonMetrica("volumen_total", "Volumen total") +
+      "</div>" +
+      '<div class="grafico-contenedor grafico-contenedor-grande"><canvas id="grafico-progreso"></canvas></div>' +
+      renderEstadoVacioGrafico() +
+      "</div>"
+    );
+  }
+
+  function renderEstadoVacioGrafico() {
+    return (
+      '<div id="progreso-grafico-vacio" class="progreso-estado-vacio oculto">' +
+      '<span class="progreso-estado-vacio-icono" aria-hidden="true">📉</span>' +
+      '<p class="progreso-estado-vacio-titulo">Todavía no hay registros para este ejercicio</p>' +
+      '<p class="nota">Cargá una sesión de gimnasio con este ejercicio en la pestaña Entrenar para ver su evolución acá.</p>' +
       "</div>"
     );
   }
@@ -85,11 +146,44 @@ GYMAPP.progreso = (function () {
     );
   }
 
-  function tarjetaRacha(nombre, valor) {
+  /* --- Calendario (sección) --- */
+
+  function renderSeccionCalendario(sesiones) {
+    return '<div class="progreso-panel"><h3>Calendario</h3>' + renderCalendario(sesiones) + "</div>";
+  }
+
+  /* --- Historial accesible ---
+     Vista compacta de solo lectura de las últimas sesiones. Editar y
+     eliminar sigue viviendo exclusivamente en Entrenar (PRO-03): acá solo
+     se muestra un resumen y un acceso directo, para no duplicar esa lógica. */
+
+  function renderSeccionHistorialAccesible(sesiones) {
+    var recientes = sesiones
+      .slice()
+      .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); })
+      .slice(0, 3);
+
+    var lista = recientes.length
+      ? '<div class="progreso-historial-lista">' + recientes.map(renderItemHistorialCompacto).join("") + "</div>"
+      : '<p class="nota">Todavía no registraste ninguna sesión.</p>';
+
     return (
-      '<div class="tarjeta-macro">' +
-      '<span class="tarjeta-macro-valor">' + valor + (valor === 1 ? " día" : " días") + "</span>" +
-      '<span class="tarjeta-macro-nombre">' + nombre + "</span>" +
+      '<div class="progreso-panel">' +
+      "<h3>Historial</h3>" +
+      lista +
+      '<button type="button" data-accion="ver-historial-completo" class="btn btn-secundario btn-ancho">Ver y editar historial completo</button>' +
+      "</div>"
+    );
+  }
+
+  function renderItemHistorialCompacto(sesion) {
+    var fechaLegible = formatearFechaLegible(new Date(GYMAPP.util.fechaLocalISO(sesion.fecha) + "T00:00:00"));
+    var resumen = sesion.tipo === "gimnasio" ? "🏋️ Gimnasio" : "⚽ Fútbol";
+
+    return (
+      '<div class="progreso-historial-item">' +
+      '<span class="historial-item-fecha">' + fechaLegible + "</span>" +
+      '<span class="historial-item-resumen">' + resumen + "</span>" +
       "</div>"
     );
   }
@@ -265,6 +359,8 @@ GYMAPP.progreso = (function () {
       var valor;
       if (metrica === "peso_maximo") {
         valor = registro.series.reduce(function (max, serie) { return Math.max(max, serie.peso_kg); }, 0);
+      } else if (metrica === "repeticiones") {
+        valor = registro.series.reduce(function (acc, serie) { return acc + serie.reps; }, 0);
       } else {
         valor = registro.series.reduce(function (acc, serie) { return acc + serie.peso_kg * serie.reps; }, 0);
       }
@@ -277,28 +373,31 @@ GYMAPP.progreso = (function () {
     return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
   }
 
+  var ETIQUETAS_METRICA = {
+    peso_maximo: "Peso máximo (kg)",
+    repeticiones: "Repeticiones totales",
+    volumen_total: "Volumen total (kg)"
+  };
+
   function dibujarGrafico(container, data) {
     var canvas = container.querySelector("#grafico-progreso");
     if (!canvas) return;
-    var notaEl = container.querySelector("#progreso-grafico-nota");
+    var vacioEl = container.querySelector("#progreso-grafico-vacio");
 
     var puntos = obtenerSerieEjercicio(data.sesiones_entrenamiento, estado.ejercicioId, estado.metrica);
 
     if (!puntos.length) {
       canvas.style.display = "none";
-      if (notaEl) {
-        notaEl.textContent = "Todavía no hay sesiones registradas para este ejercicio.";
-        notaEl.classList.remove("oculto");
-      }
+      if (vacioEl) vacioEl.classList.remove("oculto");
       return;
     }
 
     canvas.style.display = "";
-    if (notaEl) notaEl.classList.add("oculto");
+    if (vacioEl) vacioEl.classList.add("oculto");
 
     var labels = puntos.map(function (p) { return formatearFechaCorta(p.fecha); });
     var valores = puntos.map(function (p) { return p.valor; });
-    var etiqueta = estado.metrica === "peso_maximo" ? "Peso máximo (kg)" : "Volumen total (kg)";
+    var etiqueta = ETIQUETAS_METRICA[estado.metrica] || ETIQUETAS_METRICA.peso_maximo;
 
     GYMAPP.graficos.graficoLinea(canvas, labels, valores, etiqueta);
   }
@@ -324,6 +423,12 @@ GYMAPP.progreso = (function () {
         estado.mesActual = new Date(estado.mesActual.getFullYear(), estado.mesActual.getMonth() - 1, 1);
       } else if (accion === "mes-siguiente") {
         estado.mesActual = new Date(estado.mesActual.getFullYear(), estado.mesActual.getMonth() + 1, 1);
+      } else if (accion === "ver-historial-completo") {
+        /* El historial editable vive en Entrenar (PRO-03); acá solo
+           enlazamos a esa pestaña en vez de duplicar esa lógica. */
+        var navEntrenar = document.getElementById("nav-entrenar");
+        if (navEntrenar) navEntrenar.click();
+        return;
       } else {
         return;
       }
