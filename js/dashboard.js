@@ -40,7 +40,7 @@ GYMAPP.dashboard = (function () {
   function construirMapaDiasEntrenados(sesiones) {
     var acumulado = {};
     sesiones.forEach(function (s) {
-      var key = s.fecha.slice(0, 10);
+      var key = GYMAPP.util.fechaLocalISO(s.fecha);
       if (!acumulado[key]) acumulado[key] = { gimnasio: false, futbol: false };
       if (s.tipo === "gimnasio") acumulado[key].gimnasio = true;
       if (s.tipo === "futbol") acumulado[key].futbol = true;
@@ -55,7 +55,7 @@ GYMAPP.dashboard = (function () {
 
   function calcularResumenSemanal(data) {
     var dias7 = ultimosNDiasISO(7);
-    var sesiones7 = data.sesiones_entrenamiento.filter(function (s) { return dias7.indexOf(s.fecha.slice(0, 10)) !== -1; });
+    var sesiones7 = data.sesiones_entrenamiento.filter(function (s) { return dias7.indexOf(GYMAPP.util.fechaLocalISO(s.fecha)) !== -1; });
     var registros7 = data.registros_nutricion.filter(function (r) { return dias7.indexOf(r.fecha) !== -1 && r.cumplimiento; });
     var enObjetivo = registros7.filter(function (r) { return r.cumplimiento === "en_objetivo"; }).length;
 
@@ -248,5 +248,10 @@ GYMAPP.dashboard = (function () {
     });
   }
 
-  return { render: render };
+  return {
+    render: render,
+    /* Expuestas para pruebas unitarias de cálculo de fechas. */
+    construirMapaDiasEntrenados: construirMapaDiasEntrenados,
+    calcularResumenSemanal: calcularResumenSemanal
+  };
 })();

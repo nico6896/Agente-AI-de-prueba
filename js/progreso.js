@@ -13,7 +13,7 @@ GYMAPP.progreso = (function () {
       estado.ejercicioId = opcionesEjercicio[0].id;
     }
 
-    var rachas = calcularRachas(obtenerFechasEntrenadas(data.sesiones_entrenamiento));
+    var rachas = calcularRachas(obtenerDiasActivosOrdenados(data.sesiones_entrenamiento));
 
     container.innerHTML = template(data, opcionesEjercicio, rachas);
     if (!container.dataset.progresoBound) {
@@ -168,7 +168,7 @@ GYMAPP.progreso = (function () {
   function construirMapaDias(sesiones) {
     var acumulado = {};
     sesiones.forEach(function (s) {
-      var key = s.fecha.slice(0, 10);
+      var key = GYMAPP.util.fechaLocalISO(s.fecha);
       if (!acumulado[key]) acumulado[key] = { gimnasio: false, futbol: false };
       if (s.tipo === "gimnasio") acumulado[key].gimnasio = true;
       if (s.tipo === "futbol") acumulado[key].futbol = true;
@@ -206,23 +206,35 @@ GYMAPP.progreso = (function () {
     return date.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
   }
 
-  /* --- Rachas --- */
+  /* --- Rachas ---
+     Tres cálculos distintos, que no deben mezclarse:
+     - días activos: fechas calendario únicas con al menos una sesión (gimnasio
+       y fútbol el mismo día cuentan como un solo día activo).
+     - cantidad de sesiones: total de registros en sesiones_entrenamiento (se
+       calcula aparte, ver dashboard.js calcularResumenSemanal).
+     - racha consecutiva: se deriva de los días activos, nunca de la cantidad
+       de sesiones. */
 
-  function obtenerFechasEntrenadas(sesiones) {
-    var set = {};
-    sesiones.forEach(function (s) { set[s.fecha.slice(0, 10)] = true; });
-    return Object.keys(set).sort();
+  function obtenerDiasActivosOrdenados(sesiones) {
+    var diasActivos = {};
+    sesiones.forEach(function (s) { diasActivos[GYMAPP.util.fechaLocalISO(s.fecha)] = true; });
+    return Object.keys(diasActivos).sort();
   }
 
-  function calcularRachas(fechasOrdenadas) {
-    if (!fechasOrdenadas.length) return { actual: 0, maxima: 0 };
+  /* Recibe días activos ÚNICOS ya ordenados (ver obtenerDiasActivosOrdenados).
+     racha máxima: mayor cantidad de días activos consecutivos en todo el
+     historial. racha actual: la racha vigente hoy, contemplando que si el
+     último día activo fue ayer, la racha sigue viva (todavía no venció el
+     día de hoy); si el último día activo fue antes de ayer, se cortó. */
+  function calcularRachas(diasActivosOrdenados) {
+    if (!diasActivosOrdenados.length) return { actual: 0, maxima: 0 };
 
     var maxima = 1;
     var rachaEnCurso = 1;
 
-    for (var i = 1; i < fechasOrdenadas.length; i++) {
-      var anterior = new Date(fechasOrdenadas[i - 1] + "T00:00:00");
-      var actual = new Date(fechasOrdenadas[i] + "T00:00:00");
+    for (var i = 1; i < diasActivosOrdenados.length; i++) {
+      var anterior = new Date(diasActivosOrdenados[i - 1] + "T00:00:00");
+      var actual = new Date(diasActivosOrdenados[i] + "T00:00:00");
       var diffDias = Math.round((actual - anterior) / 86400000);
       rachaEnCurso = diffDias === 1 ? rachaEnCurso + 1 : 1;
       if (rachaEnCurso > maxima) maxima = rachaEnCurso;
@@ -230,9 +242,9 @@ GYMAPP.progreso = (function () {
 
     var hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    var ultimaFecha = new Date(fechasOrdenadas[fechasOrdenadas.length - 1] + "T00:00:00");
-    var diasDesdeUltimaSesion = Math.round((hoy - ultimaFecha) / 86400000);
-    var rachaActual = diasDesdeUltimaSesion <= 1 ? rachaEnCurso : 0;
+    var ultimoDiaActivo = new Date(diasActivosOrdenados[diasActivosOrdenados.length - 1] + "T00:00:00");
+    var diasDesdeUltimoDiaActivo = Math.round((hoy - ultimoDiaActivo) / 86400000);
+    var rachaActual = diasDesdeUltimoDiaActivo <= 1 ? rachaEnCurso : 0;
 
     return { actual: rachaActual, maxima: maxima };
   }
@@ -319,5 +331,10 @@ GYMAPP.progreso = (function () {
     });
   }
 
-  return { render: render };
+  return {
+    render: render,
+    /* Expuestas para pruebas unitarias de cálculo de días activos y racha. */
+    obtenerDiasActivosOrdenados: obtenerDiasActivosOrdenados,
+    calcularRachas: calcularRachas
+  };
 })();
