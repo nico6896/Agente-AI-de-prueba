@@ -543,6 +543,62 @@ body {
   resize: vertical;
 }
 
+/* Historial de sesiones (Entrenar) */
+.seccion-historial {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-borde);
+}
+
+.seccion-historial h3 {
+  margin: 0 0 9px;
+  font-size: 0.98rem;
+  color: var(--color-texto-secundario);
+}
+
+.historial-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.historial-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.historial-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.historial-item-fecha {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.historial-item-resumen {
+  font-size: 0.83rem;
+  color: var(--color-texto-secundario);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historial-item-acciones {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 /* Progreso */
 .pantalla-progreso h3 {
   margin: 18px 0 8px;

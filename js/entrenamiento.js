@@ -3,16 +3,26 @@ var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 
 GYMAPP.entrenamiento = (function () {
   var RPE_VALORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  var MENSAJE_ERROR_GUARDADO = "No se pudo guardar el cambio. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.";
 
   /* Estado del borrador de sesión en curso. No se persiste hasta "Guardar sesión". */
   var estado = null;
 
   function estadoInicial() {
     return {
+      /* Si tiene un id, guardarSesion() edita esa sesión existente en vez de
+         crear una nueva. Nunca se persiste tal cual: es solo el borrador. */
+      editandoId: null,
       fecha: fechaHoyISO(),
       tipo: "gimnasio",
       diaRutinaId: "",
       seriesPorEjercicio: {},
+      /* Solo se usa editando una sesión de gimnasio: instantánea de qué
+         ejercicios tenía ESA sesión (id + etiqueta para mostrar), resuelta
+         una vez al entrar en edición. Nunca se vuelve a mirar la rutina
+         actual durante la edición, así que un día u ejercicio borrado
+         después no bloquea editar la sesión. */
+      ejerciciosHistoricos: [],
       duracion_min: "",
       rpe: null,
       notas: "",
@@ -29,7 +39,10 @@ GYMAPP.entrenamiento = (function () {
     if (!estado) estado = estadoInicial();
     var data = GYMAPP.storage.getData();
 
-    if (estado.tipo === "gimnasio" && estado.diaRutinaId) {
+    /* Al editar, seriesPorEjercicio ya viene precargado desde la sesión
+       histórica (ver cargarParaEditar); no hay que completarlo con la
+       rutina actual. */
+    if (!estado.editandoId && estado.tipo === "gimnasio" && estado.diaRutinaId) {
       var dia = buscarDia(data.rutina.dias, estado.diaRutinaId);
       if (dia) asegurarSeriesInicializadas(dia);
     }
@@ -66,7 +79,13 @@ GYMAPP.entrenamiento = (function () {
       '<div id="entrenar-mensaje" class="mensaje oculto"></div>' +
       (estado.tipo === "gimnasio" ? renderGimnasio(data, estado) : renderFutbol(estado)) +
       renderComun(estado) +
-      '<button type="button" data-accion="guardar-sesion" class="btn btn-primario">Guardar sesión</button>' +
+      '<button type="button" data-accion="guardar-sesion" class="btn btn-primario">' +
+      (estado.editandoId ? "Guardar cambios" : "Guardar sesión") +
+      "</button>" +
+      (estado.editandoId
+        ? '<button type="button" data-accion="cancelar-edicion" class="btn btn-secundario">Cancelar edición</button>'
+        : "") +
+      renderHistorial(data) +
       "</div>"
     );
   }
@@ -97,6 +116,8 @@ GYMAPP.entrenamiento = (function () {
   }
 
   function renderGimnasio(data, estado) {
+    if (estado.editandoId) return renderGimnasioEdicion(estado);
+
     var dias = data.rutina.dias;
     if (!dias.length) {
       return '<p class="nota">Todavía no tenés días en tu rutina. Cargá uno desde el ícono de ajustes (Rutina).</p>';
@@ -148,6 +169,56 @@ GYMAPP.entrenamiento = (function () {
     );
   }
 
+  /* Edición de una sesión de gimnasio: se muestran EXACTAMENTE los
+     ejercicios que ya tenía esa sesión (estado.ejerciciosHistoricos), nunca
+     los de la rutina actual. El día de rutina se muestra solo informativo
+     (no editable): cambiar a qué día pertenece la sesión implicaría
+     reconstruirla con otros ejercicios, y eso es justamente lo que no
+     queremos hacer al editar un registro histórico. */
+  function renderGimnasioEdicion(estado) {
+    var nombreDia = estado.nombreDiaHistorico || "Día ya no existe en la rutina";
+    var html = '<div class="campo"><label>Día de rutina</label><p class="nota">' + GYMAPP.util.escapeHtml(nombreDia) + "</p></div>";
+
+    if (!estado.ejerciciosHistoricos.length) {
+      return html + '<p class="nota">Esta sesión no tiene ejercicios registrados.</p>';
+    }
+
+    html += '<div class="ejercicios-entrenar">' +
+      estado.ejerciciosHistoricos.map(renderEjercicioHistoricoEntrenar).join("") +
+      "</div>";
+
+    return html;
+  }
+
+  function renderEjercicioHistoricoEntrenar(ejercicioHistorico) {
+    var series = estado.seriesPorEjercicio[ejercicioHistorico.ejercicio_id] || [];
+
+    return (
+      '<div class="ejercicio-entrenar-card" data-ejercicio-id="' + ejercicioHistorico.ejercicio_id + '">' +
+      '<div class="ejercicio-entrenar-header">' +
+      "<strong>" + GYMAPP.util.escapeHtml(ejercicioHistorico.etiqueta) + "</strong>" +
+      (ejercicioHistorico.objetivo ? '<span class="ejercicio-objetivo">' + GYMAPP.util.escapeHtml(ejercicioHistorico.objetivo) + "</span>" : "") +
+      "</div>" +
+      '<div class="series-lista">' +
+      series.map(function (s, i) { return renderSerieInput(ejercicioHistorico.ejercicio_id, i, s); }).join("") +
+      "</div>" +
+      '<button type="button" data-accion="agregar-serie" data-ejercicio-id="' + ejercicioHistorico.ejercicio_id + '" class="btn-agregar-serie">+ Serie</button>' +
+      "</div>"
+    );
+  }
+
+  /* Busca un ejercicio por id en TODOS los días de la rutina actual (no solo
+     en el día original de la sesión), para poder mostrar su nombre incluso
+     si el ejercicio se movió de día. Devuelve null si ya no existe en
+     ningún lado. */
+  function buscarEjercicioEnRutina(dias, ejercicioId) {
+    for (var i = 0; i < dias.length; i++) {
+      var encontrado = dias[i].ejercicios.filter(function (e) { return e.id === ejercicioId; })[0];
+      if (encontrado) return encontrado;
+    }
+    return null;
+  }
+
   function renderSerieInput(ejercicioId, indice, serie) {
     return (
       '<div class="serie-input-row" data-ejercicio-id="' + ejercicioId + '" data-serie-indice="' + indice + '">' +
@@ -193,6 +264,140 @@ GYMAPP.entrenamiento = (function () {
     );
   }
 
+  /* --- Historial de sesiones --- */
+
+  function formatearFechaHistorial(fechaLocalIso) {
+    var d = new Date(fechaLocalIso + "T00:00:00");
+    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
+  function renderHistorial(data) {
+    var sesiones = data.sesiones_entrenamiento;
+    if (!sesiones.length) {
+      return '<div class="seccion-historial"><h3>Historial de sesiones</h3><p class="nota">Todavía no registraste ninguna sesión.</p></div>';
+    }
+
+    var ordenadas = sesiones.slice().sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); });
+
+    return (
+      '<div class="seccion-historial">' +
+      "<h3>Historial de sesiones</h3>" +
+      '<div class="historial-lista">' +
+      ordenadas.map(function (s) { return renderItemHistorial(s, data.rutina.dias); }).join("") +
+      "</div>" +
+      "</div>"
+    );
+  }
+
+  function renderItemHistorial(sesion, dias) {
+    var fechaLegible = formatearFechaHistorial(GYMAPP.util.fechaLocalISO(sesion.fecha));
+    var resumen;
+
+    if (sesion.tipo === "gimnasio") {
+      var dia = buscarDia(dias, sesion.dia_rutina_id);
+      var cantidad = (sesion.ejercicios_realizados || []).length;
+      resumen = "🏋️ " + (dia ? GYMAPP.util.escapeHtml(dia.nombre) : "Día ya no existe en la rutina") +
+        " · " + cantidad + (cantidad === 1 ? " ejercicio" : " ejercicios");
+    } else {
+      var fd = sesion.futbol_detalle || {};
+      resumen = "⚽ " + (fd.tipo === "partido" ? "Partido" : "Entrenamiento") +
+        (fd.minutos_jugados ? " · " + fd.minutos_jugados + " min" : "");
+    }
+
+    return (
+      '<div class="historial-item" data-sesion-id="' + sesion.id + '">' +
+      '<div class="historial-item-info">' +
+      '<span class="historial-item-fecha">' + fechaLegible + "</span>" +
+      '<span class="historial-item-resumen">' + resumen + "</span>" +
+      "</div>" +
+      '<div class="historial-item-acciones">' +
+      '<button type="button" data-accion="editar-sesion" data-sesion-id="' + sesion.id + '" class="btn-icono" aria-label="Editar sesión">✏️</button>' +
+      '<button type="button" data-accion="borrar-sesion" data-sesion-id="' + sesion.id + '" class="btn-icono btn-borrar" aria-label="Borrar sesión">🗑️</button>' +
+      "</div>" +
+      "</div>"
+    );
+  }
+
+  /* Carga una sesión existente en el borrador para editarla. Reconstruye
+     seriesPorEjercicio y ejerciciosHistoricos directamente desde
+     ejercicios_realizados de la sesión (nunca desde la rutina actual), así
+     que un día o ejercicio borrado después no impide editar los valores ya
+     registrados. usa fechaLocalISO (PRO-01/PRO-02) para precargar el campo
+     de fecha en el día LOCAL correcto, nunca el día UTC del timestamp
+     guardado. */
+  function cargarParaEditar(sesion, data) {
+    var seriesPorEjercicio = {};
+    var ejerciciosHistoricos = [];
+    var dia = sesion.dia_rutina_id ? buscarDia(data.rutina.dias, sesion.dia_rutina_id) : null;
+
+    if (sesion.tipo === "gimnasio") {
+      (sesion.ejercicios_realizados || []).forEach(function (er) {
+        seriesPorEjercicio[er.ejercicio_id] = er.series.map(function (s) {
+          return { peso_kg: String(s.peso_kg), reps: String(s.reps) };
+        });
+        var ejercicioRutina = buscarEjercicioEnRutina(data.rutina.dias, er.ejercicio_id);
+        ejerciciosHistoricos.push({
+          ejercicio_id: er.ejercicio_id,
+          etiqueta: ejercicioRutina ? (ejercicioRutina.nombre || "(sin nombre)") : "Ejercicio eliminado de la rutina",
+          objetivo: ejercicioRutina ? (ejercicioRutina.series_objetivo + " × " + ejercicioRutina.reps_objetivo) : ""
+        });
+      });
+    }
+
+    estado = {
+      editandoId: sesion.id,
+      fecha: GYMAPP.util.fechaLocalISO(sesion.fecha),
+      tipo: sesion.tipo,
+      diaRutinaId: sesion.dia_rutina_id || "",
+      nombreDiaHistorico: dia ? dia.nombre : null,
+      seriesPorEjercicio: seriesPorEjercicio,
+      ejerciciosHistoricos: ejerciciosHistoricos,
+      duracion_min: sesion.duracion_min != null ? String(sesion.duracion_min) : "",
+      rpe: sesion.rpe || null,
+      notas: sesion.notas || "",
+      futbol: sesion.futbol_detalle
+        ? {
+            tipo: sesion.futbol_detalle.tipo || "entrenamiento",
+            posicion: sesion.futbol_detalle.posicion || "",
+            minutos_jugados: sesion.futbol_detalle.minutos_jugados != null ? String(sesion.futbol_detalle.minutos_jugados) : ""
+          }
+        : estadoInicial().futbol
+    };
+  }
+
+  function iniciarEdicion(container, sesionId) {
+    var data = GYMAPP.storage.getData();
+    var sesion = data.sesiones_entrenamiento.filter(function (s) { return s.id === sesionId; })[0];
+    if (!sesion) return;
+    cargarParaEditar(sesion, data);
+    render(container);
+    window.scrollTo(0, 0);
+    mostrarMensaje(container, "Editando la sesión del " + formatearFechaHistorial(GYMAPP.util.fechaLocalISO(sesion.fecha)) + ".", "info");
+  }
+
+  function borrarSesion(container, sesionId) {
+    var data = GYMAPP.storage.getData();
+    var sesion = data.sesiones_entrenamiento.filter(function (s) { return s.id === sesionId; })[0];
+    if (!sesion) return;
+
+    var etiquetaTipo = sesion.tipo === "gimnasio" ? "de gimnasio" : "de fútbol";
+    var fechaLegible = formatearFechaHistorial(GYMAPP.util.fechaLocalISO(sesion.fecha));
+    if (!confirm("¿Eliminar esta sesión " + etiquetaTipo + " del " + fechaLegible + "? Esta acción no se puede deshacer.")) return;
+
+    var resultado = GYMAPP.storage.updateData(function (d) {
+      d.sesiones_entrenamiento = d.sesiones_entrenamiento.filter(function (s) { return s.id !== sesionId; });
+    }, { alertaAutomatica: false });
+
+    if (!resultado.guardado) {
+      mostrarMensaje(container, MENSAJE_ERROR_GUARDADO, "error");
+      return;
+    }
+
+    if (estado.editandoId === sesionId) estado = estadoInicial();
+    render(container);
+    mostrarMensaje(container, "Sesión eliminada.", "exito");
+  }
+
   /* --- Helpers de datos --- */
 
   function obtenerUltimoRegistro(sesiones, ejercicioId) {
@@ -236,6 +441,13 @@ GYMAPP.entrenamiento = (function () {
         render(container);
       } else if (accion === "guardar-sesion") {
         guardarSesion(container);
+      } else if (accion === "editar-sesion") {
+        iniciarEdicion(container, boton.dataset.sesionId);
+      } else if (accion === "cancelar-edicion") {
+        estado = estadoInicial();
+        render(container);
+      } else if (accion === "borrar-sesion") {
+        borrarSesion(container, boton.dataset.sesionId);
       }
     });
 
@@ -292,6 +504,25 @@ GYMAPP.entrenamiento = (function () {
     return resultado;
   }
 
+  /* Igual que construirEjerciciosRealizados, pero recorriendo los ejercicios
+     que ya tenía la sesión (estado.ejerciciosHistoricos) en vez de los de un
+     día de rutina. Se usa al editar, para no depender de que el día o los
+     ejercicios sigan existiendo en la rutina actual. */
+  function construirEjerciciosRealizadosDesdeHistorico(ejerciciosHistoricos) {
+    var resultado = [];
+    ejerciciosHistoricos.forEach(function (eh) {
+      var seriesValidas = (estado.seriesPorEjercicio[eh.ejercicio_id] || [])
+        .filter(function (s) { return s.peso_kg !== "" || s.reps !== ""; })
+        .map(function (s) {
+          return { peso_kg: parseFloat(s.peso_kg) || 0, reps: parseInt(s.reps, 10) || 0 };
+        });
+      if (seriesValidas.length) {
+        resultado.push({ ejercicio_id: eh.ejercicio_id, series: seriesValidas });
+      }
+    });
+    return resultado;
+  }
+
   function construirFechaSesion(fechaSeleccionada) {
     if (fechaSeleccionada === fechaHoyISO()) {
       return new Date().toISOString();
@@ -321,8 +552,19 @@ GYMAPP.entrenamiento = (function () {
       return;
     }
 
+    var esEdicion = !!estado.editandoId;
+    var data = GYMAPP.storage.getData();
+    var sesionOriginal = null;
+    if (esEdicion) {
+      sesionOriginal = data.sesiones_entrenamiento.filter(function (s) { return s.id === estado.editandoId; })[0] || null;
+      if (!sesionOriginal) {
+        mostrarMensaje(container, "Esta sesión ya no existe (puede haber sido eliminada). Cancelá la edición e intentá de nuevo.", "error");
+        return;
+      }
+    }
+
     var sesion = {
-      id: GYMAPP.util.generarId(),
+      id: esEdicion ? sesionOriginal.id : GYMAPP.util.generarId(),
       fecha: construirFechaSesion(estado.fecha),
       tipo: estado.tipo,
       dia_rutina_id: null,
@@ -334,22 +576,34 @@ GYMAPP.entrenamiento = (function () {
     };
 
     if (estado.tipo === "gimnasio") {
-      if (!estado.diaRutinaId) {
-        mostrarMensaje(container, "Elegí un día de rutina antes de guardar.", "error");
-        return;
+      var ejerciciosRealizados;
+
+      if (esEdicion) {
+        /* Edición de una sesión histórica: se conservan exactamente el día y
+           los ejercicios con los que se registró originalmente, sin volver a
+           mirar la rutina actual. Solo se editan las series (peso/reps) de
+           esos ejercicios. Esto es lo que permite editar sesiones aunque el
+           día o el ejercicio ya no existan en la rutina. */
+        ejerciciosRealizados = construirEjerciciosRealizadosDesdeHistorico(estado.ejerciciosHistoricos);
+        sesion.dia_rutina_id = sesionOriginal.dia_rutina_id;
+      } else {
+        if (!estado.diaRutinaId) {
+          mostrarMensaje(container, "Elegí un día de rutina antes de guardar.", "error");
+          return;
+        }
+        var dia = buscarDia(data.rutina.dias, estado.diaRutinaId);
+        if (!dia) {
+          mostrarMensaje(container, "El día seleccionado ya no existe en tu rutina.", "error");
+          return;
+        }
+        ejerciciosRealizados = construirEjerciciosRealizados(dia);
+        sesion.dia_rutina_id = estado.diaRutinaId;
       }
-      var data = GYMAPP.storage.getData();
-      var dia = buscarDia(data.rutina.dias, estado.diaRutinaId);
-      if (!dia) {
-        mostrarMensaje(container, "El día seleccionado ya no existe en tu rutina.", "error");
-        return;
-      }
-      var ejerciciosRealizados = construirEjerciciosRealizados(dia);
+
       if (!ejerciciosRealizados.length) {
         mostrarMensaje(container, "Cargá al menos una serie antes de guardar.", "error");
         return;
       }
-      sesion.dia_rutina_id = estado.diaRutinaId;
       sesion.ejercicios_realizados = ejerciciosRealizados;
     } else {
       var minutos = parseInt(estado.futbol.minutos_jugados, 10) || 0;
@@ -360,8 +614,14 @@ GYMAPP.entrenamiento = (function () {
       };
     }
 
-    var resultado = GYMAPP.storage.updateData(function (data) {
-      data.sesiones_entrenamiento.push(sesion);
+    var resultado = GYMAPP.storage.updateData(function (d) {
+      if (esEdicion) {
+        var indice = d.sesiones_entrenamiento.findIndex(function (s) { return s.id === sesion.id; });
+        if (indice === -1) d.sesiones_entrenamiento.push(sesion);
+        else d.sesiones_entrenamiento[indice] = sesion;
+      } else {
+        d.sesiones_entrenamiento.push(sesion);
+      }
     }, { alertaAutomatica: false });
     if (!resultado.guardado) {
       mostrarMensaje(container, "No se pudo guardar la sesión. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.", "error");
@@ -370,7 +630,7 @@ GYMAPP.entrenamiento = (function () {
 
     estado = estadoInicial();
     render(container);
-    mostrarMensaje(container, "Sesión guardada. ¡Buen trabajo!", "exito");
+    mostrarMensaje(container, esEdicion ? "Cambios guardados." : "Sesión guardada. ¡Buen trabajo!", "exito");
   }
 
   return { render: render };
