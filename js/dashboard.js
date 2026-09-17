@@ -56,10 +56,13 @@ GYMAPP.dashboard = (function () {
   function calcularResumenSemanal(data) {
     var dias7 = ultimosNDiasISO(7);
     var sesiones7 = data.sesiones_entrenamiento.filter(function (s) { return dias7.indexOf(GYMAPP.util.fechaLocalISO(s.fecha)) !== -1; });
+    var diasActivos7 = Object.keys(construirMapaDiasEntrenados(sesiones7)).length;
     var registros7 = data.registros_nutricion.filter(function (r) { return dias7.indexOf(r.fecha) !== -1 && r.cumplimiento; });
     var enObjetivo = registros7.filter(function (r) { return r.cumplimiento === "en_objetivo"; }).length;
 
-    return { sesiones: sesiones7.length, diasCerrados: registros7.length, diasEnObjetivo: enObjetivo };
+    /* diasActivos7 se agrega sin tocar los campos existentes (sesiones,
+       diasCerrados, diasEnObjetivo), que ya se usan en pruebas de PRO-01/02. */
+    return { sesiones: sesiones7.length, diasActivos7: diasActivos7, diasCerrados: registros7.length, diasEnObjetivo: enObjetivo };
   }
 
   function calcularProximoDia(data) {
@@ -78,68 +81,256 @@ GYMAPP.dashboard = (function () {
     return dias[(indiceUltimo + 1) % dias.length];
   }
 
-  function obtenerGruposDelDia(dias, diaId) {
-    var dia = dias.filter(function (d) { return d.id === diaId; })[0];
-    if (!dia) return [];
-    var grupos = dia.ejercicios.map(function (e) { return (e.grupo_muscular || "").trim(); }).filter(Boolean);
+  /* Busca un ejercicio por id en TODOS los días de la rutina actual (mismo
+     criterio que usa entrenamiento.js al editar sesiones históricas).
+     Devuelve null si el ejercicio ya no existe en ningún lado. */
+  function buscarEjercicioEnRutina(dias, ejercicioId) {
+    for (var i = 0; i < dias.length; i++) {
+      var encontrado = dias[i].ejercicios.filter(function (e) { return e.id === ejercicioId; })[0];
+      if (encontrado) return encontrado;
+    }
+    return null;
+  }
+
+  /* DASH-04 (corrección confirmada): antes se tomaban los grupos musculares
+     de dia.ejercicios (la configuración ACTUAL del día de rutina), no de lo
+     que la sesión realmente registró. Si el día se editó después (se le
+     cambiaron los ejercicios), la alerta comparaba grupos musculares que
+     nunca se entrenaron en esa sesión. Ahora se derivan de
+     ejercicios_realizados, la única fuente confiable de qué se entrenó. */
+  function obtenerGruposDeSesion(dias, sesion) {
+    var grupos = (sesion.ejercicios_realizados || []).map(function (er) {
+      var ejercicio = buscarEjercicioEnRutina(dias, er.ejercicio_id);
+      return ejercicio ? (ejercicio.grupo_muscular || "").trim() : "";
+    }).filter(Boolean);
     return grupos.filter(function (g, i) { return grupos.indexOf(g) === i; });
   }
 
   function calcularAlertaGrupoMuscular(data) {
     var sesionesGimnasio = data.sesiones_entrenamiento
-      .filter(function (s) { return s.tipo === "gimnasio" && s.dia_rutina_id; })
+      .filter(function (s) { return s.tipo === "gimnasio" && s.ejercicios_realizados && s.ejercicios_realizados.length; })
       .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); });
 
     if (sesionesGimnasio.length < 2) return null;
 
-    var gruposA = obtenerGruposDelDia(data.rutina.dias, sesionesGimnasio[0].dia_rutina_id);
-    var gruposB = obtenerGruposDelDia(data.rutina.dias, sesionesGimnasio[1].dia_rutina_id);
+    var gruposA = obtenerGruposDeSesion(data.rutina.dias, sesionesGimnasio[0]);
+    var gruposB = obtenerGruposDeSesion(data.rutina.dias, sesionesGimnasio[1]);
     var interseccion = gruposA.filter(function (g) { return gruposB.indexOf(g) !== -1; });
 
     return interseccion.length ? interseccion : null;
   }
 
+  /* --- Datos de hoy (DASH-02) --- */
+
+  /* Null si todavía no se registró ninguna comida hoy (no crea el registro:
+     eso solo lo hace nutricion.js al agregar una comida). */
+  function obtenerRegistroHoy(data) {
+    var hoy = fechaISO(new Date());
+    return data.registros_nutricion.filter(function (r) { return r.fecha === hoy; })[0] || null;
+  }
+
+  /* "gimnasio" | "futbol" | "ambos" | null (todavía no entrenó hoy).
+     Reutiliza construirMapaDiasEntrenados (PRO-01/02), que ya agrupa por
+     día calendario LOCAL en vez de UTC. */
+  function obtenerEstadoEntrenoHoy(data) {
+    var mapa = construirMapaDiasEntrenados(data.sesiones_entrenamiento);
+    return mapa[fechaISO(new Date())] || null;
+  }
+
+  /* --- Peso corporal (DASH-05) --- */
+
+  /* null si no hay ninguna medida. variacion es null si es el primer
+     registro (no hay uno anterior con el que compararlo). */
+  function calcularVariacionPeso(medidas) {
+    if (!medidas.length) return null;
+    var ordenadas = medidas.slice().sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+    var ultimo = ordenadas[ordenadas.length - 1];
+    var anterior = ordenadas.length > 1 ? ordenadas[ordenadas.length - 2] : null;
+    var variacion = anterior ? Math.round((ultimo.peso_kg - anterior.peso_kg) * 10) / 10 : null;
+    return { pesoActual: ultimo.peso_kg, variacion: variacion };
+  }
+
   /* --- Templates --- */
 
+  /* Layout (DASH-01): saludo -> alerta (si hay) -> columna principal (hoy +
+     resumen semanal) -> columna lateral (próximo día + peso corporal). En
+     mobile todo se apila en ese orden; en tablet/desktop pasa a 2 columnas
+     (ver .dashboard-layout en styles.css, mismo patrón que .progreso-layout
+     de PRO-04). */
   function template(data) {
     var metas = data.usuario.metas_macros;
     var resumen = calcularResumenSemanal(data);
+    var rachas = GYMAPP.progreso.calcularRachas(GYMAPP.progreso.obtenerDiasActivosOrdenados(data.sesiones_entrenamiento));
     var proximoDia = calcularProximoDia(data);
     var gruposRepetidos = calcularAlertaGrupoMuscular(data);
+    var registroHoy = obtenerRegistroHoy(data);
+    var estadoEntrenoHoy = obtenerEstadoEntrenoHoy(data);
+    var variacionPeso = calcularVariacionPeso(data.medidas_corporales);
 
     return (
       '<div class="pantalla pantalla-dashboard">' +
       '<h1 class="saludo-dashboard">¡Hola, ' + esc(data.usuario.nombre) + "!</h1>" +
-      "<h2>Tus metas diarias</h2>" +
-      '<div class="tarjetas-macros">' +
-      tarjeta(metas.calorias + " kcal", "Calorías") +
-      tarjeta(metas.proteinas_g + " g", "Proteínas") +
-      tarjeta(metas.carbos_g + " g", "Carbohidratos") +
-      tarjeta(metas.grasas_g + " g", "Grasas") +
-      "</div>" +
       '<div id="dashboard-mensaje" class="mensaje oculto"></div>' +
-      (gruposRepetidos
-        ? '<div class="alerta-grupo-muscular">⚠️ Entrenaste ' + esc(gruposRepetidos.join(", ")) + " dos veces seguidas. Considerá variar el grupo muscular.</div>"
-        : "") +
+      renderAlerta(gruposRepetidos) +
+      '<div class="dashboard-layout">' +
+      '<div class="dashboard-columna-principal">' +
+      renderSeccionHoy(metas, registroHoy, estadoEntrenoHoy) +
+      renderSeccionResumenSemanal(data.sesiones_entrenamiento, resumen, rachas) +
+      "</div>" +
+      '<div class="dashboard-columna-lateral">' +
+      renderSeccionProximoDia(proximoDia) +
+      renderSeccionPeso(data, variacionPeso) +
+      "</div>" +
+      "</div>" +
+      "</div>"
+    );
+  }
+
+  function renderAlerta(gruposRepetidos) {
+    if (!gruposRepetidos) return "";
+    return (
+      '<div class="dashboard-alerta">' +
+      '<span class="dashboard-alerta-icono" aria-hidden="true">⚠️</span>' +
+      "<span>Entrenaste " + esc(gruposRepetidos.join(", ")) + " dos veces seguidas. Considerá variar el grupo muscular.</span>" +
+      "</div>"
+    );
+  }
+
+  /* --- Sección "Hoy" (DASH-02) --- */
+
+  function renderSeccionHoy(metas, registroHoy, estadoEntrenoHoy) {
+    var contenidoNutricion = registroHoy
+      ? filaMacroDashboard("Calorías", registroHoy.totales_calculados.calorias, metas.calorias, "kcal") +
+        filaMacroDashboard("Proteínas", registroHoy.totales_calculados.proteinas_g, metas.proteinas_g, "g") +
+        filaMacroDashboard("Carbohidratos", registroHoy.totales_calculados.carbos_g, metas.carbos_g, "g") +
+        filaMacroDashboard("Grasas", registroHoy.totales_calculados.grasas_g, metas.grasas_g, "g")
+      : renderEstadoVacioNutricionHoy();
+
+    return (
+      '<div class="dashboard-panel">' +
+      "<h3>Hoy</h3>" +
+      contenidoNutricion +
+      renderEstadoEntrenoHoy(estadoEntrenoHoy) +
+      "</div>"
+    );
+  }
+
+  function filaMacroDashboard(nombre, real, objetivo, unidad) {
+    var pct = objetivo > 0 ? Math.min(100, Math.round((real / objetivo) * 100)) : 0;
+    return (
+      '<div class="fila-macro">' +
+      '<div class="fila-macro-header"><span>' + nombre + "</span><span>" + real + " / " + objetivo + " " + unidad + "</span></div>" +
+      '<div class="barra-macro-fondo"><div class="barra-macro-relleno" style="width:' + pct + '%"></div></div>' +
+      "</div>"
+    );
+  }
+
+  function renderEstadoVacioNutricionHoy() {
+    return (
+      '<div class="dashboard-estado-vacio">' +
+      '<span class="dashboard-estado-vacio-icono" aria-hidden="true">🍽️</span>' +
+      '<p class="dashboard-estado-vacio-titulo">Todavía no registraste comidas hoy</p>' +
+      '<button type="button" data-accion="ir-a-nutricion" class="btn btn-secundario btn-ancho">Registrar comida</button>' +
+      "</div>"
+    );
+  }
+
+  var ETIQUETAS_ENTRENO_HOY = {
+    gimnasio: "🏋️ Entrenaste gimnasio hoy",
+    futbol: "⚽ Jugaste al fútbol hoy",
+    ambos: "🏋️⚽ Entrenaste gimnasio y fútbol hoy"
+  };
+
+  function renderEstadoEntrenoHoy(estadoEntrenoHoy) {
+    if (estadoEntrenoHoy) {
+      return '<p class="dashboard-estado-entreno">' + ETIQUETAS_ENTRENO_HOY[estadoEntrenoHoy] + "</p>";
+    }
+    return (
+      '<div class="dashboard-estado-vacio dashboard-estado-vacio-compacto">' +
+      '<p class="nota">Todavía no entrenaste hoy.</p>' +
+      '<button type="button" data-accion="ir-a-entrenar" class="btn btn-secundario btn-ancho">Registrar entrenamiento</button>' +
+      "</div>"
+    );
+  }
+
+  /* --- Sección "Esta semana" (DASH-03) --- */
+
+  function renderSeccionResumenSemanal(sesiones, resumen, rachas) {
+    return (
+      '<div class="dashboard-panel">' +
       "<h3>Esta semana</h3>" +
-      renderTiraSemana(data.sesiones_entrenamiento) +
-      '<div class="tarjetas-macros">' +
-      tarjeta(resumen.sesiones, resumen.sesiones === 1 ? "Sesión (últimos 7 días)" : "Sesiones (últimos 7 días)") +
+      renderTiraSemana(sesiones) +
+      '<div class="tarjetas-macros dashboard-resumen">' +
+      tarjeta(resumen.diasActivos7, resumen.diasActivos7 === 1 ? "Día activo (7 días)" : "Días activos (7 días)") +
+      tarjeta(resumen.sesiones, resumen.sesiones === 1 ? "Sesión (7 días)" : "Sesiones (7 días)") +
+      tarjeta(rachas.actual, "Racha actual (días)") +
       tarjeta(resumen.diasCerrados ? resumen.diasEnObjetivo + "/" + resumen.diasCerrados : "—", "Días en objetivo (nutrición)") +
       "</div>" +
-      "<h3>Próximo día sugerido</h3>" +
-      (proximoDia
-        ? '<p class="proximo-dia-sugerido">🏋️ ' + esc(proximoDia.nombre) + "</p>"
-        : '<p class="nota">Todavía no tenés días en tu rutina.</p>') +
+      "</div>"
+    );
+  }
+
+  /* --- Sección "Próximo día sugerido" --- */
+
+  function renderSeccionProximoDia(proximoDia) {
+    var contenido = proximoDia
+      ? '<p class="proximo-dia-sugerido">🏋️ ' + esc(proximoDia.nombre) + "</p>"
+      : (
+          '<div class="dashboard-estado-vacio">' +
+          '<span class="dashboard-estado-vacio-icono" aria-hidden="true">📋</span>' +
+          '<p class="dashboard-estado-vacio-titulo">Todavía no tenés días en tu rutina</p>' +
+          '<button type="button" data-accion="ir-a-rutina" class="btn btn-secundario btn-ancho">Armar rutina</button>' +
+          "</div>"
+        );
+
+    return '<div class="dashboard-panel"><h3>Próximo día sugerido</h3>' + contenido + "</div>";
+  }
+
+  /* --- Sección "Peso corporal" (DASH-05) --- */
+
+  function renderSeccionPeso(data, variacionPeso) {
+    var resumenPeso = variacionPeso
+      ? renderResumenPeso(variacionPeso)
+      : (
+          '<div class="dashboard-estado-vacio">' +
+          '<span class="dashboard-estado-vacio-icono" aria-hidden="true">⚖️</span>' +
+          '<p class="dashboard-estado-vacio-titulo">Todavía no cargaste medidas corporales</p>' +
+          "</div>"
+        );
+
+    var grafico = data.medidas_corporales.length
+      ? '<div class="grafico-contenedor"><canvas id="grafico-peso-corporal"></canvas></div>'
+      : "";
+
+    return (
+      '<div class="dashboard-panel">' +
       "<h3>Peso corporal</h3>" +
-      (data.medidas_corporales.length
-        ? '<div class="grafico-contenedor"><canvas id="grafico-peso-corporal"></canvas></div>'
-        : '<p class="nota">Todavía no cargaste medidas corporales.</p>') +
+      resumenPeso +
+      grafico +
       '<div class="registro-peso-rapido">' +
       '<input type="number" id="input-peso-hoy" inputmode="decimal" step="0.1" min="20" placeholder="Peso de hoy (kg)" />' +
       '<input type="number" id="input-cintura-hoy" inputmode="decimal" step="0.5" min="30" placeholder="Cintura (cm, opcional)" />' +
       '<button type="button" data-accion="guardar-peso" class="btn btn-secundario btn-ancho">Guardar medida</button>' +
       "</div>" +
+      "</div>"
+    );
+  }
+
+  function renderResumenPeso(v) {
+    var textoVariacion;
+    if (v.variacion === null) {
+      textoVariacion = "Primer registro";
+    } else if (v.variacion === 0) {
+      textoVariacion = "➡️ Sin cambios desde el registro anterior";
+    } else if (v.variacion > 0) {
+      textoVariacion = "🔺 +" + v.variacion + " kg desde el registro anterior";
+    } else {
+      textoVariacion = "🔻 " + v.variacion + " kg desde el registro anterior";
+    }
+    return (
+      '<div class="dashboard-peso-resumen">' +
+      '<span class="dashboard-peso-valor">' + v.pesoActual + " kg</span>" +
+      '<span class="nota">' + textoVariacion + "</span>" +
       "</div>"
     );
   }
@@ -242,16 +433,32 @@ GYMAPP.dashboard = (function () {
 
   function bindEventos(container) {
     container.addEventListener("click", function (ev) {
-      var boton = ev.target.closest('[data-accion="guardar-peso"]');
+      var boton = ev.target.closest("[data-accion]");
       if (!boton) return;
-      guardarPeso(container);
+      var accion = boton.dataset.accion;
+
+      if (accion === "guardar-peso") {
+        guardarPeso(container);
+      } else if (accion === "ir-a-nutricion") {
+        var navNutricion = document.getElementById("nav-nutricion");
+        if (navNutricion) navNutricion.click();
+      } else if (accion === "ir-a-entrenar") {
+        var navEntrenar = document.getElementById("nav-entrenar");
+        if (navEntrenar) navEntrenar.click();
+      } else if (accion === "ir-a-rutina") {
+        var btnRutina = document.getElementById("btn-rutina");
+        if (btnRutina) btnRutina.click();
+      }
     });
   }
 
   return {
     render: render,
-    /* Expuestas para pruebas unitarias de cálculo de fechas. */
+    /* Expuestas para pruebas unitarias. */
     construirMapaDiasEntrenados: construirMapaDiasEntrenados,
-    calcularResumenSemanal: calcularResumenSemanal
+    calcularResumenSemanal: calcularResumenSemanal,
+    calcularAlertaGrupoMuscular: calcularAlertaGrupoMuscular,
+    calcularVariacionPeso: calcularVariacionPeso,
+    obtenerEstadoEntrenoHoy: obtenerEstadoEntrenoHoy
   };
 })();

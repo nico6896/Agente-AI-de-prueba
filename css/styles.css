@@ -1045,19 +1045,115 @@ body {
 
 /* Dashboard */
 .pantalla-dashboard h3 {
-  margin: 18px 0 8px;
+  margin: 0 0 10px;
   font-size: 0.98rem;
   color: var(--color-texto-secundario);
 }
 
-.alerta-grupo-muscular {
+/* Rediseño (DASH-01..06): paneles, layout de columnas, alerta, estados vacíos */
+.dashboard-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-panel {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 16px;
+}
+
+.dashboard-columna-principal .dashboard-panel:first-child,
+.dashboard-columna-lateral .dashboard-panel:first-child {
+  margin-top: 16px;
+}
+
+.dashboard-resumen {
+  margin-top: 4px;
+}
+
+.dashboard-estado-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 20px 12px 8px;
+}
+
+.dashboard-estado-vacio-compacto {
+  padding: 10px 0 0;
+}
+
+.dashboard-estado-vacio-icono {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.dashboard-estado-vacio-titulo {
+  font-weight: 600;
+  margin: 0;
+}
+
+.dashboard-estado-vacio .btn-ancho {
+  margin-top: 10px;
+}
+
+.dashboard-estado-entreno {
+  margin: 10px 0 0;
+  font-weight: 600;
+  font-size: 0.93rem;
+}
+
+.dashboard-alerta {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   background: rgba(227, 27, 35, 0.12);
   border: 1px solid var(--color-primario);
   color: var(--color-primario);
   border-radius: 10px;
   padding: 11px;
   font-size: 0.84rem;
-  margin: 14px 0;
+  margin: 0 0 4px;
+}
+
+.dashboard-alerta-icono {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.dashboard-peso-resumen {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.dashboard-peso-valor {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+@media (min-width: 720px) {
+  .dashboard-resumen {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1000px) {
+  .pantalla-dashboard {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .dashboard-layout {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
 }
 
 .proximo-dia-sugerido {
