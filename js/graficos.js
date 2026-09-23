@@ -2,8 +2,8 @@
 var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 
 GYMAPP.graficos = (function () {
-  var COLOR_PRIMARIO = "#e31b23";
-  var COLOR_PRIMARIO_FONDO = "rgba(227, 27, 35, 0.15)";
+  var COLOR_PRIMARIO = "#2F6FED";
+  var COLOR_PRIMARIO_FONDO = "rgba(47, 111, 237, 0.18)";
   var COLOR_TEXTO_SECUNDARIO = "#a3a3a3";
   var COLOR_BORDE = "#2b2b2b";
 

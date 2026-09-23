@@ -244,7 +244,7 @@ GYMAPP.nutricion = (function () {
     var objetivos = fechas.map(function () { return objetivoValor; });
 
     GYMAPP.graficos.graficoBarras(canvas, labels, [
-      { label: "Real", data: reales, backgroundColor: "#e31b23" },
+      { label: "Real", data: reales, backgroundColor: "#2F6FED" },
       { label: "Objetivo", data: objetivos, backgroundColor: "rgba(255, 255, 255, 0.25)" }
     ]);
   }

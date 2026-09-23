@@ -169,7 +169,7 @@ GYMAPP.dashboard = (function () {
 
     return (
       '<div class="pantalla pantalla-dashboard">' +
-      '<h1 class="saludo-dashboard">¡Hola, ' + esc(data.usuario.nombre) + "!</h1>" +
+      '<h1 class="saludo-dashboard"><span class="marca-monograma" aria-hidden="true">NO</span>¡Hola, ' + esc(data.usuario.nombre) + "!</h1>" +
       '<div id="dashboard-mensaje" class="mensaje oculto"></div>' +
       renderAlerta(gruposRepetidos) +
       '<div class="dashboard-layout">' +

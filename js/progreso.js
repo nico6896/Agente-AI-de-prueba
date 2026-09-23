@@ -4,18 +4,37 @@ var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 GYMAPP.progreso = (function () {
   var DIAS_SEMANA = ["L", "M", "M", "J", "V", "S", "D"];
 
-  var estado = { ejercicioId: "", metrica: "peso_maximo", mesActual: inicioDeMes(new Date()) };
+  /* seleccionTipo: "ejercicio" | "dia". Ante selección inválida/vacía, se
+     prioriza "ejercicio" como valor por defecto (PRO-04, sin cambios) aunque
+     el selector (PRO-05) liste primero los días de rutina. */
+  var estado = { seleccionTipo: "ejercicio", seleccionId: "", metrica: "peso_maximo", mesActual: inicioDeMes(new Date()) };
 
   function render(container) {
     var data = GYMAPP.storage.getData();
     var opcionesEjercicio = construirOpcionesEjercicio(data);
-    if ((!estado.ejercicioId || !opcionesEjercicio.some(function (o) { return o.id === estado.ejercicioId; })) && opcionesEjercicio.length) {
-      estado.ejercicioId = opcionesEjercicio[0].id;
+    var opcionesDias = construirOpcionesDias(data);
+
+    var seleccionValida =
+      estado.seleccionId &&
+      ((estado.seleccionTipo === "dia" && opcionesDias.some(function (o) { return o.id === estado.seleccionId; })) ||
+        (estado.seleccionTipo === "ejercicio" && opcionesEjercicio.some(function (o) { return o.id === estado.seleccionId; })));
+
+    if (!seleccionValida) {
+      if (opcionesEjercicio.length) {
+        estado.seleccionTipo = "ejercicio";
+        estado.seleccionId = opcionesEjercicio[0].id;
+      } else if (opcionesDias.length) {
+        estado.seleccionTipo = "dia";
+        estado.seleccionId = opcionesDias[0].id;
+      } else {
+        estado.seleccionTipo = "ejercicio";
+        estado.seleccionId = "";
+      }
     }
 
     var rachas = calcularRachas(obtenerDiasActivosOrdenados(data.sesiones_entrenamiento));
 
-    container.innerHTML = template(data, opcionesEjercicio, rachas);
+    container.innerHTML = template(data, opcionesDias, opcionesEjercicio, rachas);
     if (!container.dataset.progresoBound) {
       bindEventos(container);
       container.dataset.progresoBound = "1";
@@ -40,6 +59,16 @@ GYMAPP.progreso = (function () {
     return Object.keys(mapa).map(function (id) { return { id: id, nombre: mapa[id] }; });
   }
 
+  /* --- Datos para el selector de día de rutina (PRO-05) ---
+     Solo días vigentes en la rutina actual: a diferencia de los ejercicios,
+     no se reconstruyen días eliminados a partir del historial, porque el
+     pedido no lo exige y evita inventar un concepto ("día eliminado") que
+     no existía en el esquema. */
+
+  function construirOpcionesDias(data) {
+    return data.rutina.dias.map(function (dia) { return { id: dia.id, nombre: dia.nombre || "(sin nombre)" }; });
+  }
+
   /* --- Templates ---
      Layout: resumen general -> evolución por ejercicio (con protagonismo) ->
      calendario -> historial accesible. En pantallas angostas todo se apila
@@ -47,7 +76,7 @@ GYMAPP.progreso = (function () {
      calendario+historial en una columna lateral (ver .progreso-layout en
      styles.css). */
 
-  function template(data, opciones, rachas) {
+  function template(data, opcionesDias, opcionesEjercicio, rachas) {
     var sesiones = data.sesiones_entrenamiento;
 
     return (
@@ -56,7 +85,7 @@ GYMAPP.progreso = (function () {
       renderResumenGeneral(sesiones, rachas) +
       '<div class="progreso-layout">' +
       '<div class="progreso-columna-principal">' +
-      renderSeccionEvolucion(opciones) +
+      renderSeccionEvolucion(opcionesDias, opcionesEjercicio) +
       "</div>" +
       '<div class="progreso-columna-lateral">' +
       renderSeccionCalendario(sesiones) +
@@ -95,37 +124,70 @@ GYMAPP.progreso = (function () {
 
   /* --- Evolución por ejercicio --- */
 
-  function renderSeccionEvolucion(opciones) {
-    if (!opciones.length) {
+  function renderSeccionEvolucion(opcionesDias, opcionesEjercicio) {
+    if (!opcionesDias.length && !opcionesEjercicio.length) {
       return (
         '<div class="progreso-panel">' +
-        "<h3>Evolución por ejercicio</h3>" +
+        "<h3>Evolución</h3>" +
         '<p class="nota">Todavía no hay ejercicios en tu rutina ni en tu historial.</p>' +
         "</div>"
       );
     }
 
-    var selectorEjercicio =
-      '<div class="campo"><label for="select-progreso-ejercicio">Ejercicio</label>' +
-      '<select id="select-progreso-ejercicio">' +
-      opciones.map(function (o) {
-        return '<option value="' + o.id + '"' + (o.id === estado.ejercicioId ? " selected" : "") + ">" +
-          GYMAPP.util.escapeHtml(o.nombre) + "</option>";
-      }).join("") +
-      "</select></div>";
+    var selectorPrincipal = renderSelectorPrincipal(opcionesDias, opcionesEjercicio);
+    var cuerpo = estado.seleccionTipo === "dia" ? renderVistaDia() : renderVistaEjercicio();
 
     return (
       '<div class="progreso-panel progreso-evolucion">' +
-      "<h3>Evolución por ejercicio</h3>" +
-      selectorEjercicio +
+      "<h3>Evolución</h3>" +
+      selectorPrincipal +
+      cuerpo +
+      "</div>"
+    );
+  }
+
+  /* Selector unificado (PRO-05): un solo <select>, con los días de rutina
+     agrupados primero y los ejercicios debajo. Los valores de ejercicio se
+     mantienen SIN prefijo (igual que antes de PRO-05) para no romper
+     integraciones existentes que seleccionan por id de ejercicio; los
+     valores de día llevan el prefijo "dia:" para distinguirse en el
+     handler de "change" sin ambigüedad posible con un id de ejercicio. */
+  function renderSelectorPrincipal(opcionesDias, opcionesEjercicio) {
+    var gruposDias = opcionesDias.length
+      ? '<optgroup label="Días de rutina">' +
+        opcionesDias.map(function (o) {
+          var seleccionado = estado.seleccionTipo === "dia" && estado.seleccionId === o.id;
+          return '<option value="dia:' + o.id + '"' + (seleccionado ? " selected" : "") + ">" +
+            GYMAPP.util.escapeHtml(o.nombre) + "</option>";
+        }).join("") +
+        "</optgroup>"
+      : "";
+
+    var gruposEjercicios = opcionesEjercicio.length
+      ? '<optgroup label="Ejercicios">' +
+        opcionesEjercicio.map(function (o) {
+          var seleccionado = estado.seleccionTipo === "ejercicio" && estado.seleccionId === o.id;
+          return '<option value="' + o.id + '"' + (seleccionado ? " selected" : "") + ">" +
+            GYMAPP.util.escapeHtml(o.nombre) + "</option>";
+        }).join("") +
+        "</optgroup>"
+      : "";
+
+    return (
+      '<div class="campo"><label for="select-progreso-ejercicio">Ver progreso de</label>' +
+      '<select id="select-progreso-ejercicio">' + gruposDias + gruposEjercicios + "</select></div>"
+    );
+  }
+
+  function renderVistaEjercicio() {
+    return (
       '<div class="selector-tipo metrica-selector">' +
       botonMetrica("peso_maximo", "Peso máximo") +
       botonMetrica("repeticiones", "Repeticiones") +
       botonMetrica("volumen_total", "Volumen total") +
       "</div>" +
       '<div class="grafico-contenedor grafico-contenedor-grande"><canvas id="grafico-progreso"></canvas></div>' +
-      renderEstadoVacioGrafico() +
-      "</div>"
+      renderEstadoVacioGrafico()
     );
   }
 
@@ -135,6 +197,35 @@ GYMAPP.progreso = (function () {
       '<span class="progreso-estado-vacio-icono" aria-hidden="true">📉</span>' +
       '<p class="progreso-estado-vacio-titulo">Todavía no hay registros para este ejercicio</p>' +
       '<p class="nota">Cargá una sesión de gimnasio con este ejercicio en la pestaña Entrenar para ver su evolución acá.</p>' +
+      "</div>"
+    );
+  }
+
+  /* --- Evolución por día de rutina (PRO-05) ---
+     Reutiliza exactamente las mismas 3 métricas (peso máximo, repeticiones,
+     volumen total) que la vista por ejercicio, agregadas sobre TODAS las
+     series de TODOS los ejercicios realizados en cada sesión de ese día.
+     No se agregan datos nuevos: todo sale de sesiones_entrenamiento. */
+
+  function renderVistaDia() {
+    return (
+      '<div class="selector-tipo metrica-selector">' +
+      botonMetrica("peso_maximo", "Peso máximo") +
+      botonMetrica("repeticiones", "Repeticiones") +
+      botonMetrica("volumen_total", "Volumen total") +
+      "</div>" +
+      '<p id="progreso-dia-info" class="nota oculto"></p>' +
+      '<div class="grafico-contenedor grafico-contenedor-grande"><canvas id="grafico-progreso"></canvas></div>' +
+      renderEstadoVacioDia()
+    );
+  }
+
+  function renderEstadoVacioDia() {
+    return (
+      '<div id="progreso-grafico-vacio" class="progreso-estado-vacio oculto">' +
+      '<span class="progreso-estado-vacio-icono" aria-hidden="true">📉</span>' +
+      '<p class="progreso-estado-vacio-titulo">Todavía no hay sesiones registradas para este día</p>' +
+      '<p class="nota">Cargá una sesión de gimnasio para este día en la pestaña Entrenar para ver su evolución acá.</p>' +
       "</div>"
     );
   }
@@ -368,6 +459,30 @@ GYMAPP.progreso = (function () {
     });
   }
 
+  /* Igual criterio que obtenerSerieEjercicio, pero agregando TODAS las
+     series de TODOS los ejercicios realizados en la sesión (no solo uno),
+     ya que la vista por día busca la evolución global de ese día. */
+  function obtenerSerieDia(sesiones, diaId, metrica) {
+    var relevantes = sesiones
+      .filter(function (s) { return s.tipo === "gimnasio" && s.dia_rutina_id === diaId; })
+      .sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+
+    return relevantes.map(function (s) {
+      var series = (s.ejercicios_realizados || []).reduce(function (acc, er) {
+        return acc.concat(er.series || []);
+      }, []);
+      var valor;
+      if (metrica === "peso_maximo") {
+        valor = series.reduce(function (max, serie) { return Math.max(max, serie.peso_kg); }, 0);
+      } else if (metrica === "repeticiones") {
+        valor = series.reduce(function (acc, serie) { return acc + serie.reps; }, 0);
+      } else {
+        valor = series.reduce(function (acc, serie) { return acc + serie.peso_kg * serie.reps; }, 0);
+      }
+      return { fecha: s.fecha, valor: valor };
+    });
+  }
+
   function formatearFechaCorta(fechaISO) {
     var d = new Date(fechaISO);
     return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
@@ -383,17 +498,27 @@ GYMAPP.progreso = (function () {
     var canvas = container.querySelector("#grafico-progreso");
     if (!canvas) return;
     var vacioEl = container.querySelector("#progreso-grafico-vacio");
+    var infoEl = container.querySelector("#progreso-dia-info");
 
-    var puntos = obtenerSerieEjercicio(data.sesiones_entrenamiento, estado.ejercicioId, estado.metrica);
+    var puntos = estado.seleccionTipo === "dia"
+      ? obtenerSerieDia(data.sesiones_entrenamiento, estado.seleccionId, estado.metrica)
+      : obtenerSerieEjercicio(data.sesiones_entrenamiento, estado.seleccionId, estado.metrica);
 
     if (!puntos.length) {
       canvas.style.display = "none";
       if (vacioEl) vacioEl.classList.remove("oculto");
+      if (infoEl) infoEl.classList.add("oculto");
       return;
     }
 
     canvas.style.display = "";
     if (vacioEl) vacioEl.classList.add("oculto");
+    if (infoEl) {
+      infoEl.textContent = puntos.length === 1
+        ? "1 sesión registrada para este día."
+        : puntos.length + " sesiones registradas para este día.";
+      infoEl.classList.remove("oculto");
+    }
 
     var labels = puntos.map(function (p) { return formatearFechaCorta(p.fecha); });
     var valores = puntos.map(function (p) { return p.valor; });
@@ -407,7 +532,14 @@ GYMAPP.progreso = (function () {
   function bindEventos(container) {
     container.addEventListener("change", function (ev) {
       if (ev.target.id === "select-progreso-ejercicio") {
-        estado.ejercicioId = ev.target.value;
+        var valor = ev.target.value;
+        if (valor.indexOf("dia:") === 0) {
+          estado.seleccionTipo = "dia";
+          estado.seleccionId = valor.slice(4);
+        } else {
+          estado.seleccionTipo = "ejercicio";
+          estado.seleccionId = valor;
+        }
         render(container);
       }
     });
