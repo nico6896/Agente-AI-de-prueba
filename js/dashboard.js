@@ -53,6 +53,49 @@ GYMAPP.dashboard = (function () {
     return resultado;
   }
 
+  /* --- Progreso semanal por tipo (DASH-07) ---
+     Metas fijas de días únicos por semana calendario (lunes a domingo,
+     mismo rango que renderTiraSemana). Reutiliza construirMapaDiasEntrenados
+     (ya cuenta días únicos, no sesiones) para que "gimnasio+fútbol el mismo
+     día" sume 1 a cada meta y "dos sesiones del mismo tipo el mismo día" no
+     duplique el avance: ambas reglas ya las garantiza ese mapa. */
+  var META_GIMNASIO_SEMANAL = 5;
+  var META_FUTBOL_SEMANAL = 2;
+
+  function obtenerDiasSemanaActualISO() {
+    var hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    var lunes = new Date(hoy);
+    lunes.setDate(lunes.getDate() - diaDeSemanaLunesPrimero(hoy));
+
+    var dias = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(lunes);
+      d.setDate(d.getDate() + i);
+      dias.push(fechaISO(d));
+    }
+    return dias;
+  }
+
+  function calcularProgresoSemanal(sesiones) {
+    var diasSemana = obtenerDiasSemanaActualISO();
+    var mapaDias = construirMapaDiasEntrenados(sesiones);
+    var gimnasio = 0;
+    var futbol = 0;
+
+    diasSemana.forEach(function (key) {
+      var estado = mapaDias[key];
+      if (!estado) return;
+      if (estado === "gimnasio" || estado === "ambos") gimnasio++;
+      if (estado === "futbol" || estado === "ambos") futbol++;
+    });
+
+    return {
+      gimnasio: { actual: gimnasio, meta: META_GIMNASIO_SEMANAL },
+      futbol: { actual: futbol, meta: META_FUTBOL_SEMANAL }
+    };
+  }
+
   function calcularResumenSemanal(data) {
     var dias7 = ultimosNDiasISO(7);
     var sesiones7 = data.sesiones_entrenamiento.filter(function (s) { return dias7.indexOf(GYMAPP.util.fechaLocalISO(s.fecha)) !== -1; });
@@ -166,10 +209,12 @@ GYMAPP.dashboard = (function () {
     var registroHoy = obtenerRegistroHoy(data);
     var estadoEntrenoHoy = obtenerEstadoEntrenoHoy(data);
     var variacionPeso = calcularVariacionPeso(data.medidas_corporales);
+    var progresoSemanal = calcularProgresoSemanal(data.sesiones_entrenamiento);
 
     return (
       '<div class="pantalla pantalla-dashboard">' +
       '<h1 class="saludo-dashboard"><span class="marca-monograma" aria-hidden="true">NO</span>¡Hola, ' + esc(data.usuario.nombre) + "!</h1>" +
+      renderHeroSemanal(progresoSemanal) +
       '<div id="dashboard-mensaje" class="mensaje oculto"></div>' +
       renderAlerta(gruposRepetidos) +
       '<div class="dashboard-layout">' +
@@ -182,6 +227,47 @@ GYMAPP.dashboard = (function () {
       renderSeccionPeso(data, variacionPeso) +
       "</div>" +
       "</div>" +
+      "</div>"
+    );
+  }
+
+  /* --- Hero semanal (DASH-07/08) ---
+     Dos anillos SVG (gimnasio y fútbol) con el progreso de días únicos de
+     esta semana calendario contra la meta fija. Se arma como markup con el
+     stroke-dashoffset ya calculado, sin necesidad de un paso de dibujo por
+     JS después del innerHTML (a diferencia de Chart.js): es la opción más
+     liviana y robusta para dos anillos estáticos por render. */
+  var RADIO_ANILLO = 42;
+  var CIRCUNFERENCIA_ANILLO = 2 * Math.PI * RADIO_ANILLO;
+
+  function renderHeroSemanal(progresoSemanal) {
+    return (
+      '<div class="dashboard-hero">' +
+      '<span class="dashboard-hero-eyebrow">Meta semanal</span>' +
+      "<h2 class=\"dashboard-hero-titulo\">Progreso de esta semana</h2>" +
+      '<div class="dashboard-hero-anillos">' +
+      renderAnillo(progresoSemanal.gimnasio, "gimnasio", "Gimnasio", "🏋️") +
+      renderAnillo(progresoSemanal.futbol, "futbol", "Fútbol", "⚽") +
+      "</div>" +
+      "</div>"
+    );
+  }
+
+  function renderAnillo(valor, tipoClase, etiqueta, icono) {
+    var pct = valor.meta > 0 ? Math.min(1, valor.actual / valor.meta) : 0;
+    var dashoffset = CIRCUNFERENCIA_ANILLO * (1 - pct);
+
+    return (
+      '<div class="anillo-item">' +
+      '<div class="anillo-svg-wrap">' +
+      '<svg class="anillo-svg" viewBox="0 0 100 100" aria-hidden="true">' +
+      '<circle class="anillo-fondo" cx="50" cy="50" r="' + RADIO_ANILLO + '"></circle>' +
+      '<circle class="anillo-progreso anillo-' + tipoClase + '" cx="50" cy="50" r="' + RADIO_ANILLO +
+      '" stroke-dasharray="' + CIRCUNFERENCIA_ANILLO.toFixed(2) + '" stroke-dashoffset="' + dashoffset.toFixed(2) + '"></circle>' +
+      "</svg>" +
+      '<div class="anillo-valor">' + valor.actual + '<span class="anillo-valor-meta">/' + valor.meta + "</span></div>" +
+      "</div>" +
+      '<span class="anillo-etiqueta">' + icono + " " + esc(etiqueta) + "</span>" +
       "</div>"
     );
   }
@@ -457,6 +543,7 @@ GYMAPP.dashboard = (function () {
     /* Expuestas para pruebas unitarias. */
     construirMapaDiasEntrenados: construirMapaDiasEntrenados,
     calcularResumenSemanal: calcularResumenSemanal,
+    calcularProgresoSemanal: calcularProgresoSemanal,
     calcularAlertaGrupoMuscular: calcularAlertaGrupoMuscular,
     calcularVariacionPeso: calcularVariacionPeso,
     obtenerEstadoEntrenoHoy: obtenerEstadoEntrenoHoy
