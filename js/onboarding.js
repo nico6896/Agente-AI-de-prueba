@@ -2,32 +2,47 @@
 var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 
 GYMAPP.onboarding = (function () {
+  /* ONB-01: misma lógica y mismos nombres de campo que antes (ver
+     manejarSubmit), solo reagrupados visualmente en 3 secciones dentro de
+     una card, con la identidad de marca del resto de la app. */
   function render(root) {
     root.innerHTML =
       '<div class="pantalla pantalla-onboarding">' +
-      '<h1>Armemos tu perfil</h1>' +
+      '<div class="onboarding-header">' +
+      '<span class="onboarding-eyebrow">Bienvenido</span>' +
+      "<h1>Armemos tu perfil</h1>" +
       '<p class="subtitulo">Con estos datos calculamos tus metas de calorías y macros.</p>' +
-      '<form id="form-onboarding" novalidate>' +
-      campoTexto("nombre", "Nombre", "text", true) +
-      campoSelect("sexo", "Sexo", [
-        ["masculino", "Masculino"],
-        ["femenino", "Femenino"]
-      ]) +
-      campoSelect("objetivo", "Objetivo", [
-        ["recomposicion", "Recomposición"],
-        ["volumen", "Volumen"],
-        ["definicion", "Definición"]
-      ]) +
-      campoTexto("peso_kg", "Peso (kg)", "number", true, { step: "0.1", min: "20", max: "300" }) +
-      campoTexto("altura_cm", "Altura (cm)", "number", true, { step: "1", min: "100", max: "250" }) +
-      campoTexto("fecha_nacimiento", "Fecha de nacimiento", "date", true) +
-      campoSelect("nivel_actividad", "Nivel de actividad", [
-        ["sedentario", "Sedentario"],
-        ["moderado", "Moderado"],
-        ["activo", "Activo"],
-        ["muy_activo", "Muy activo"]
-      ]) +
-      '<button type="submit" class="btn btn-primario">Comenzar</button>' +
+      "</div>" +
+      '<form id="form-onboarding" novalidate class="onboarding-card">' +
+      seccionOnboarding(
+        "Datos personales",
+        campoTexto("nombre", "Nombre", "text", true) +
+          campoSelect("sexo", "Sexo", [
+            ["masculino", "Masculino"],
+            ["femenino", "Femenino"]
+          ]) +
+          campoTexto("fecha_nacimiento", "Fecha de nacimiento", "date", true)
+      ) +
+      seccionOnboarding(
+        "Medidas",
+        campoTexto("peso_kg", "Peso (kg)", "number", true, { step: "0.1", min: "20", max: "300", inputmode: "decimal" }) +
+          campoTexto("altura_cm", "Altura (cm)", "number", true, { step: "1", min: "100", max: "250", inputmode: "numeric" })
+      ) +
+      seccionOnboarding(
+        "Objetivo y actividad",
+        campoSelect("objetivo", "Objetivo", [
+          ["recomposicion", "Recomposición"],
+          ["volumen", "Volumen"],
+          ["definicion", "Definición"]
+        ]) +
+          campoSelect("nivel_actividad", "Nivel de actividad", [
+            ["sedentario", "Sedentario"],
+            ["moderado", "Moderado"],
+            ["activo", "Activo"],
+            ["muy_activo", "Muy activo"]
+          ])
+      ) +
+      '<button type="submit" class="btn btn-primario onboarding-btn-principal">Comenzar</button>' +
       "</form>" +
       "</div>";
 
@@ -35,6 +50,15 @@ GYMAPP.onboarding = (function () {
       ev.preventDefault();
       manejarSubmit(ev.target);
     });
+  }
+
+  function seccionOnboarding(titulo, camposHtml) {
+    return (
+      '<section class="onboarding-seccion">' +
+      '<h2 class="onboarding-seccion-titulo">' + titulo + "</h2>" +
+      camposHtml +
+      "</section>"
+    );
   }
 
   function campoTexto(id, label, type, requerido, extraAttrs) {

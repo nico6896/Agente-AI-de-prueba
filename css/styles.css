@@ -143,6 +143,100 @@ body {
   margin-top: 8px;
 }
 
+/* ONB-01: rediseño de onboarding/perfil inicial. Misma lógica y mismos
+   campos que antes (js/onboarding.js), reagrupados en una card con
+   secciones. Al no tener .app-header ni .bottom-nav (es la única pantalla
+   sin shell), el safe-area se resuelve acá directamente en vez de heredarlo
+   de esos componentes. */
+.pantalla-onboarding {
+  max-width: 480px;
+  margin: 0 auto;
+  padding-top: calc(var(--espaciado) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.onboarding-header {
+  margin-bottom: 18px;
+}
+
+.onboarding-eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-celeste);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.pantalla-onboarding h1 {
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+}
+
+.pantalla-onboarding .subtitulo {
+  margin: 0;
+}
+
+.onboarding-card {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 16px;
+  padding: 18px 16px 20px;
+}
+
+.onboarding-seccion {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--color-borde);
+}
+
+.onboarding-seccion:first-child {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: none;
+}
+
+.onboarding-seccion-titulo {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-celeste);
+  font-weight: 700;
+}
+
+/* Los inputs quedan un tono más oscuro que la card (--color-fondo en vez de
+   --color-superficie) para que se lean como campos "hundidos" dentro de
+   ella, en vez de fundirse con su mismo fondo. Cambio scoped a onboarding:
+   en el resto de las pantallas el input SÍ contrasta bien contra el fondo
+   de página, que ya es --color-fondo directamente. */
+.pantalla-onboarding .campo input,
+.pantalla-onboarding .campo select {
+  background: var(--color-fondo);
+}
+
+.pantalla-onboarding .campo input:focus,
+.pantalla-onboarding .campo select:focus {
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.22);
+}
+
+.onboarding-btn-principal {
+  margin-top: 20px;
+  box-shadow: 0 10px 24px rgba(47, 111, 237, 0.28);
+}
+
+@media (min-width: 720px) {
+  .pantalla-onboarding {
+    max-width: 560px;
+    padding-top: calc(40px + env(safe-area-inset-top, 0px));
+  }
+
+  .onboarding-card {
+    padding: 28px 32px 32px;
+  }
+}
+
 /* Shell / nav */
 .app-shell {
   display: flex;
