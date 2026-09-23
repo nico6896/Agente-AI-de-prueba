@@ -1,10 +1,11 @@
-/* Autenticación opcional con Supabase Auth mediante código OTP por email
-   (sin magic link ni redirecciones: en la PWA instalada en iPhone, el
-   enlace del magic link abre Safari y la sesión queda ahí, nunca vuelve a
-   la app instalada). Este módulo es completamente independiente de
-   storage.js: nunca lee ni escribe la clave "gymNutritionTracker" ni la
-   tabla datos_usuario. Solo maneja la sesión de Supabase, guardada bajo su
-   propia clave separada. */
+/* Autenticación opcional con Supabase Auth mediante email + contraseña
+   (supabase.auth.signUp / signInWithPassword). Objetivo a futuro: que la
+   misma cuenta se use en celular, tablet y computadora para sincronizar
+   datos propios; esta versión implementa exclusivamente la autenticación,
+   sin ninguna sincronización todavía. Este módulo es completamente
+   independiente de storage.js: nunca lee ni escribe la clave
+   "gymNutritionTracker" ni la tabla datos_usuario. Solo maneja la sesión
+   de Supabase, guardada bajo su propia clave separada. */
 var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 
 GYMAPP.auth = (function () {
@@ -18,24 +19,20 @@ GYMAPP.auth = (function () {
 
   /* Clave de localStorage separada de "gymNutritionTracker": la sesión de
      Supabase (tokens de acceso/refresco) se guarda acá, nunca junto a los
-     datos de la app. El código OTP en sí NUNCA se guarda en ningún lado:
-     vive solo en el input del formulario hasta que se verifica. */
+     datos de la app. La contraseña en sí NUNCA se guarda en ningún lado:
+     vive solo en el input del formulario mientras se envía la request. */
   var STORAGE_KEY_AUTH = "gymNutritionTracker_supabaseAuth";
 
-  /* Tiempo mínimo entre pedidos de código a un mismo email, para no
-     ametrallar a Supabase (que además tiene su propio límite de servidor:
-     si igual se pide antes de tiempo, Supabase devuelve un error que se
-     muestra tal cual). */
-  var COOLDOWN_REENVIO_MS = 60000;
+  var LARGO_MINIMO_PASSWORD = 6;
 
   var cliente = null;
   var clienteFalló = false;
   var sesionActual = null;
   var listeners = [];
 
-  /* Estado efímero de la UI de login (no se persiste en ningún lado).
-     paso: "pedir-email" | "pedir-codigo". */
-  var estadoCuenta = { paso: "pedir-email", email: "", cooldownHasta: 0 };
+  /* Estado efímero de la UI de login (no se persiste en ningún lado, y
+     nunca incluye la contraseña). modo: "iniciar-sesion" | "crear-cuenta". */
+  var estadoCuenta = { modo: "iniciar-sesion", email: "", cargando: false };
 
   function configurado() {
     return (
@@ -58,8 +55,9 @@ GYMAPP.auth = (function () {
           storageKey: STORAGE_KEY_AUTH,
           persistSession: true,
           autoRefreshToken: true,
-          /* Ya no dependemos de un enlace en la URL: el login es por
-             código OTP, tipeado a mano. */
+          /* No hay ningún flujo basado en enlaces de email (ni magic link
+             ni OTP): el login es por email + contraseña, así que no hace
+             falta que el cliente inspeccione la URL de retorno. */
           detectSessionInUrl: false
         }
       });
@@ -112,20 +110,21 @@ GYMAPP.auth = (function () {
     });
   }
 
-  /* Pide un código de 6 dígitos por email. El mismo signInWithOtp de
-     siempre: si envía un enlace o un código lo decide la plantilla de
-     email configurada en Supabase (Authentication -> Email Templates ->
-     Magic Link), no el código del cliente. */
-  function enviarCodigo(email) {
+  /* Crea la cuenta con email + contraseña. Con "Confirm Email" apagado en
+     Supabase, esto ya deja la sesión iniciada (onAuthStateChange dispara
+     solo). Si el email ya tenía una cuenta, Supabase puede responder sin
+     error y sin sesión nueva (para no revelar si el email existe): eso se
+     maneja en manejarCrearCuenta, no acá. */
+  function crearCuenta(email, password) {
     var c = obtenerCliente();
     if (!c) return Promise.reject(new Error("Supabase no está configurado."));
-    return c.auth.signInWithOtp({ email: email });
+    return c.auth.signUp({ email: email, password: password });
   }
 
-  function verificarCodigo(email, codigo) {
+  function iniciarSesion(email, password) {
     var c = obtenerCliente();
     if (!c) return Promise.reject(new Error("Supabase no está configurado."));
-    return c.auth.verifyOtp({ email: email, token: codigo, type: "email" });
+    return c.auth.signInWithPassword({ email: email, password: password });
   }
 
   function cerrarSesion() {
@@ -134,14 +133,9 @@ GYMAPP.auth = (function () {
     return c.auth.signOut();
   }
 
-  function puedeReenviar() {
-    return Date.now() >= estadoCuenta.cooldownHasta;
-  }
-
   /* --- UI: sección discreta de cuenta, embebida en la pantalla de Rutina --- */
 
   var REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  var REGEX_CODIGO = /^\d{6}$/;
 
   function renderSeccionCuenta() {
     if (!configurado()) {
@@ -155,8 +149,7 @@ GYMAPP.auth = (function () {
 
     var email = sesionActual && sesionActual.user ? sesionActual.user.email : null;
     if (email) return renderSeccionConectado(email);
-    if (estadoCuenta.paso === "pedir-codigo") return renderSeccionPedirCodigo();
-    return renderSeccionPedirEmail();
+    return renderSeccionFormulario();
   }
 
   function renderSeccionConectado(email) {
@@ -170,34 +163,44 @@ GYMAPP.auth = (function () {
     );
   }
 
-  function renderSeccionPedirEmail() {
+  function renderSeccionFormulario() {
+    var esCrearCuenta = estadoCuenta.modo === "crear-cuenta";
     return (
       '<div class="seccion-cuenta">' +
       "<h3>Cuenta</h3>" +
       '<div id="cuenta-mensaje" class="mensaje oculto"></div>' +
-      '<p class="nota">Ingresá tu email para recibir un código de acceso de 6 dígitos. Esto no modifica ni sincroniza tus datos guardados en este dispositivo.</p>' +
+      '<div class="selector-tipo cuenta-modo-selector">' +
+      '<button type="button" data-accion="modo-iniciar-sesion" class="btn-tipo' + (!esCrearCuenta ? " activo" : "") + '">Iniciar sesión</button>' +
+      '<button type="button" data-accion="modo-crear-cuenta" class="btn-tipo' + (esCrearCuenta ? " activo" : "") + '">Crear cuenta</button>' +
+      "</div>" +
+      '<p class="nota">' +
+      (esCrearCuenta
+        ? "Creá una cuenta con email y contraseña. Más adelante esto va a permitir sincronizar tus datos entre dispositivos."
+        : "Iniciá sesión con tu email y contraseña.") +
+      "</p>" +
       '<div class="campo">' +
       '<label for="input-email-cuenta">Email</label>' +
-      '<input type="email" id="input-email-cuenta" placeholder="tu@email.com" value="' + GYMAPP.util.escapeHtml(estadoCuenta.email) + '" />' +
+      '<input type="email" id="input-email-cuenta" placeholder="tu@email.com" value="' +
+      GYMAPP.util.escapeHtml(estadoCuenta.email) +
+      '" autocomplete="email" />' +
       "</div>" +
-      '<button type="button" data-accion="enviar-codigo" class="btn btn-secundario btn-ancho">Enviar código</button>' +
-      "</div>"
-    );
-  }
-
-  function renderSeccionPedirCodigo() {
-    return (
-      '<div class="seccion-cuenta">' +
-      "<h3>Cuenta</h3>" +
-      '<div id="cuenta-mensaje" class="mensaje oculto"></div>' +
-      '<p class="nota">Te enviamos un código de 6 dígitos a ' + GYMAPP.util.escapeHtml(estadoCuenta.email) + ". Ingresalo acá abajo (vence a los pocos minutos).</p>" +
       '<div class="campo">' +
-      '<label for="input-codigo-cuenta">Código</label>' +
-      '<input type="text" id="input-codigo-cuenta" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" />' +
+      '<label for="input-password-cuenta">Contraseña</label>' +
+      '<input type="password" id="input-password-cuenta" placeholder="••••••••" autocomplete="' +
+      (esCrearCuenta ? "new-password" : "current-password") +
+      '" />' +
       "</div>" +
-      '<button type="button" data-accion="verificar-codigo" class="btn btn-primario btn-ancho">Verificar código</button>' +
-      '<button type="button" data-accion="reenviar-codigo" class="btn btn-secundario btn-ancho"' + (puedeReenviar() ? "" : " disabled") + ">Reenviar código</button>" +
-      '<button type="button" data-accion="cambiar-email-cuenta" class="btn btn-secundario btn-ancho">Usar otro email</button>' +
+      (esCrearCuenta
+        ? '<div class="campo">' +
+          '<label for="input-password-confirmar-cuenta">Repetir contraseña</label>' +
+          '<input type="password" id="input-password-confirmar-cuenta" placeholder="••••••••" autocomplete="new-password" />' +
+          "</div>"
+        : "") +
+      '<button type="button" data-accion="' +
+      (esCrearCuenta ? "crear-cuenta" : "iniciar-sesion") +
+      '" class="btn btn-primario btn-ancho">' +
+      (esCrearCuenta ? "Crear cuenta" : "Iniciar sesión") +
+      "</button>" +
       "</div>"
     );
   }
@@ -212,107 +215,129 @@ GYMAPP.auth = (function () {
   /* Registra los eventos de click de la sección de cuenta. Se debe llamar
      una única vez por contenedor (el módulo que embebe esta sección ya
      garantiza esto con su propio guard de bindEventos). `alCambiarEstado`
-     se invoca cada vez que cambia el paso del login (email -> código ->
-     conectado) o la sesión, para que el módulo que embebe la sección
-     vuelva a renderizarla. */
+     se invoca al cambiar entre "Iniciar sesión"/"Crear cuenta" (estado
+     puramente local, no dispara onAuthStateChange); los cambios de sesión
+     en sí (login/logout exitosos) ya llegan por suscribirCambiosSesion. */
   function bindEventosCuenta(container, alCambiarEstado) {
     container.addEventListener("click", function (ev) {
       var boton = ev.target.closest(
-        '[data-accion="enviar-codigo"], [data-accion="verificar-codigo"], ' +
-        '[data-accion="reenviar-codigo"], [data-accion="cambiar-email-cuenta"], ' +
+        '[data-accion="modo-iniciar-sesion"], [data-accion="modo-crear-cuenta"], ' +
+        '[data-accion="iniciar-sesion"], [data-accion="crear-cuenta"], ' +
         '[data-accion="cerrar-sesion-cuenta"]'
       );
       if (!boton) return;
       var accion = boton.dataset.accion;
 
-      if (accion === "enviar-codigo") {
-        manejarEnviarCodigo(container, boton, alCambiarEstado, false);
-      } else if (accion === "reenviar-codigo") {
-        manejarEnviarCodigo(container, boton, alCambiarEstado, true);
-      } else if (accion === "verificar-codigo") {
-        manejarVerificarCodigo(container, boton, alCambiarEstado);
-      } else if (accion === "cambiar-email-cuenta") {
-        estadoCuenta.paso = "pedir-email";
+      if (accion === "modo-iniciar-sesion") {
+        estadoCuenta.modo = "iniciar-sesion";
         if (alCambiarEstado) alCambiarEstado();
+      } else if (accion === "modo-crear-cuenta") {
+        estadoCuenta.modo = "crear-cuenta";
+        if (alCambiarEstado) alCambiarEstado();
+      } else if (accion === "iniciar-sesion") {
+        manejarIniciarSesion(container, boton);
+      } else if (accion === "crear-cuenta") {
+        manejarCrearCuenta(container, boton);
       } else if (accion === "cerrar-sesion-cuenta") {
         manejarCerrarSesion(container, boton, alCambiarEstado);
       }
     });
   }
 
-  function manejarEnviarCodigo(container, boton, alCambiarEstado, esReenvio) {
-    var email;
-    if (esReenvio) {
-      if (!puedeReenviar()) {
-        mostrarMensajeCuenta(container, "Esperá unos segundos antes de pedir otro código.", "info");
-        return;
-      }
-      email = estadoCuenta.email;
-    } else {
-      var input = container.querySelector("#input-email-cuenta");
-      email = input ? input.value.trim() : "";
-      if (!REGEX_EMAIL.test(email)) {
-        mostrarMensajeCuenta(container, "Ingresá un email válido.", "error");
-        return;
-      }
-    }
-
-    boton.disabled = true;
-    mostrarMensajeCuenta(container, "Enviando código...", "info");
-
-    enviarCodigo(email)
-      .then(function (resultado) {
-        if (resultado && resultado.error) {
-          boton.disabled = false;
-          mostrarMensajeCuenta(container, "No se pudo enviar el código: " + resultado.error.message, "error");
-          return;
-        }
-        estadoCuenta.email = email;
-        estadoCuenta.paso = "pedir-codigo";
-        estadoCuenta.cooldownHasta = Date.now() + COOLDOWN_REENVIO_MS;
-        if (alCambiarEstado) alCambiarEstado();
-        mostrarMensajeCuenta(container, "Te enviamos un código a " + email + ". Revisá tu correo.", "exito");
-        setTimeout(function () {
-          if (alCambiarEstado) alCambiarEstado();
-        }, COOLDOWN_REENVIO_MS);
-      })
-      .catch(function (e) {
-        boton.disabled = false;
-        console.error("Error al enviar el código OTP", e);
-        mostrarMensajeCuenta(container, "Ocurrió un error de red al enviar el código. Probá de nuevo.", "error");
-      });
+  function leerEmailPassword(container) {
+    var inputEmail = container.querySelector("#input-email-cuenta");
+    var inputPassword = container.querySelector("#input-password-cuenta");
+    return {
+      email: inputEmail ? inputEmail.value.trim() : "",
+      password: inputPassword ? inputPassword.value : ""
+    };
   }
 
-  function manejarVerificarCodigo(container, boton, alCambiarEstado) {
-    var input = container.querySelector("#input-codigo-cuenta");
-    var codigo = input ? input.value.trim() : "";
-    if (!REGEX_CODIGO.test(codigo)) {
-      mostrarMensajeCuenta(container, "Ingresá el código de 6 dígitos que recibiste por email.", "error");
+  function manejarIniciarSesion(container, boton) {
+    if (estadoCuenta.cargando) return;
+    var datos = leerEmailPassword(container);
+
+    if (!REGEX_EMAIL.test(datos.email)) {
+      mostrarMensajeCuenta(container, "Ingresá un email válido.", "error");
+      return;
+    }
+    if (!datos.password) {
+      mostrarMensajeCuenta(container, "Ingresá tu contraseña.", "error");
       return;
     }
 
+    estadoCuenta.email = datos.email;
+    estadoCuenta.cargando = true;
     boton.disabled = true;
-    mostrarMensajeCuenta(container, "Verificando código...", "info");
+    mostrarMensajeCuenta(container, "Iniciando sesión...", "info");
 
-    verificarCodigo(estadoCuenta.email, codigo)
+    iniciarSesion(datos.email, datos.password)
       .then(function (resultado) {
+        estadoCuenta.cargando = false;
         boton.disabled = false;
         if (resultado && resultado.error) {
-          mostrarMensajeCuenta(
-            container,
-            "Código inválido o vencido" + (resultado.error.message ? ": " + resultado.error.message : "") + ". Pedí uno nuevo e intentá de nuevo.",
-            "error"
-          );
+          mostrarMensajeCuenta(container, "No se pudo iniciar sesión: " + resultado.error.message, "error");
           return;
         }
-        estadoCuenta.paso = "pedir-email";
-        estadoCuenta.email = "";
-        if (alCambiarEstado) alCambiarEstado();
+        /* Éxito: onAuthStateChange dispara solo y el módulo que embebe
+           esta sección (suscribirCambiosSesion) ya vuelve a renderizar
+           mostrando "Conectado como...". */
       })
       .catch(function (e) {
+        estadoCuenta.cargando = false;
         boton.disabled = false;
-        console.error("Error al verificar el código OTP", e);
-        mostrarMensajeCuenta(container, "Ocurrió un error de red al verificar el código. Probá de nuevo.", "error");
+        console.error("Error de red al iniciar sesión", e);
+        mostrarMensajeCuenta(container, "Ocurrió un error de red al iniciar sesión. Probá de nuevo.", "error");
+      });
+  }
+
+  function manejarCrearCuenta(container, boton) {
+    if (estadoCuenta.cargando) return;
+    var datos = leerEmailPassword(container);
+    var inputConfirmar = container.querySelector("#input-password-confirmar-cuenta");
+    var passwordConfirmar = inputConfirmar ? inputConfirmar.value : "";
+
+    if (!REGEX_EMAIL.test(datos.email)) {
+      mostrarMensajeCuenta(container, "Ingresá un email válido.", "error");
+      return;
+    }
+    if (datos.password.length < LARGO_MINIMO_PASSWORD) {
+      mostrarMensajeCuenta(container, "La contraseña debe tener al menos " + LARGO_MINIMO_PASSWORD + " caracteres.", "error");
+      return;
+    }
+    if (datos.password !== passwordConfirmar) {
+      mostrarMensajeCuenta(container, "Las contraseñas no coinciden.", "error");
+      return;
+    }
+
+    estadoCuenta.email = datos.email;
+    estadoCuenta.cargando = true;
+    boton.disabled = true;
+    mostrarMensajeCuenta(container, "Creando tu cuenta...", "info");
+
+    crearCuenta(datos.email, datos.password)
+      .then(function (resultado) {
+        estadoCuenta.cargando = false;
+        boton.disabled = false;
+        if (resultado && resultado.error) {
+          mostrarMensajeCuenta(container, "No se pudo crear la cuenta: " + resultado.error.message, "error");
+          return;
+        }
+        var haySesion = resultado && resultado.data && resultado.data.session;
+        if (haySesion) {
+          /* onAuthStateChange dispara solo y muestra "Conectado como...". */
+          return;
+        }
+        /* Con "Confirm Email" apagado esto no debería pasar salvo que el
+           email ya tuviera una cuenta (Supabase responde sin error y sin
+           sesión nueva, para no revelar si el email existe). */
+        mostrarMensajeCuenta(container, "Revisá el email ingresado: si ya tenías una cuenta, iniciá sesión en su lugar.", "info");
+      })
+      .catch(function (e) {
+        estadoCuenta.cargando = false;
+        boton.disabled = false;
+        console.error("Error de red al crear la cuenta", e);
+        mostrarMensajeCuenta(container, "Ocurrió un error de red al crear la cuenta. Probá de nuevo.", "error");
       });
   }
 
@@ -320,7 +345,7 @@ GYMAPP.auth = (function () {
     boton.disabled = true;
     cerrarSesion()
       .then(function () {
-        estadoCuenta.paso = "pedir-email";
+        estadoCuenta.modo = "iniciar-sesion";
         estadoCuenta.email = "";
         if (alCambiarEstado) alCambiarEstado();
       })
@@ -335,8 +360,8 @@ GYMAPP.auth = (function () {
     inicializar: inicializar,
     obtenerSesion: obtenerSesion,
     suscribirCambiosSesion: suscribirCambiosSesion,
-    enviarCodigo: enviarCodigo,
-    verificarCodigo: verificarCodigo,
+    crearCuenta: crearCuenta,
+    iniciarSesion: iniciarSesion,
     cerrarSesion: cerrarSesion,
     renderSeccionCuenta: renderSeccionCuenta,
     bindEventosCuenta: bindEventosCuenta
