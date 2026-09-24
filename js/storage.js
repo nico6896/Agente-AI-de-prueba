@@ -6,7 +6,7 @@ GYMAPP.storage = (function () {
 
   /* Versión actual del esquema de datos. Subir este número junto con un paso
      nuevo en migrarDatos() cada vez que la forma de los datos cambie. */
-  var VERSION_ESQUEMA_ACTUAL = 1;
+  var VERSION_ESQUEMA_ACTUAL = 2;
 
   var MENSAJE_ERROR_GUARDADO = (
     "No se pudieron guardar los cambios. Es posible que no haya espacio disponible en el dispositivo, " +
@@ -53,6 +53,28 @@ GYMAPP.storage = (function () {
          exactamente como estaban. */
       dataCruda.schema_version = 1;
       version = 1;
+    }
+
+    if (version < 2) {
+      /* Migración 1 -> 2 (ACT-01, base técnica de actividades configurables):
+         agrega usuario.actividades si todavía no existe, con EXACTAMENTE la
+         configuración que era la única disponible en la versión anterior
+         (Gimnasio meta 5, Fútbol meta 2) — a propósito no se infiere de
+         sesiones_entrenamiento, porque esa era la config funcional para
+         TODOS los usuarios, hayan cargado o no sesiones todavía.
+         No toca sesiones_entrenamiento, rutina, nutrición, medidas ni
+         futbol_detalle histórico: es puramente aditiva sobre `usuario`, y
+         solo si `usuario` ya existe (si es null, no hay nada que completar
+         todavía; lo arma el onboarding). Idempotente: si usuario.actividades
+         ya está seteado, no se toca. */
+      if (dataCruda.usuario && !dataCruda.usuario.actividades) {
+        dataCruda.usuario.actividades = [
+          { tipo: "gimnasio", meta_semanal: 5 },
+          { tipo: "futbol", meta_semanal: 2 }
+        ];
+      }
+      dataCruda.schema_version = 2;
+      version = 2;
     }
 
     /* Las próximas migraciones se agregan acá abajo, siguiendo el mismo patrón:
