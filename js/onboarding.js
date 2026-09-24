@@ -5,6 +5,17 @@ GYMAPP.onboarding = (function () {
   /* ONB-01: misma lógica y mismos nombres de campo que antes (ver
      manejarSubmit), solo reagrupados visualmente en 3 secciones dentro de
      una card, con la identidad de marca del resto de la app. */
+
+  /* ACT-02: configuración por defecto para un usuario nuevo, igual a la que
+     tenía toda la app antes de que las actividades fueran configurables
+     (Gimnasio 5 días + Fútbol 2 días). Se usa solo para pre-marcar la
+     sección de actividades del onboarding; el valor final que se guarda
+     sale siempre de leer el DOM al enviar el formulario. */
+  var ACTIVIDADES_DEFAULT_ONBOARDING = [
+    { tipo: "gimnasio", meta_semanal: 5 },
+    { tipo: "futbol", meta_semanal: 2 }
+  ];
+
   function render(root) {
     root.innerHTML =
       '<div class="pantalla pantalla-onboarding">' +
@@ -42,13 +53,25 @@ GYMAPP.onboarding = (function () {
             ["muy_activo", "Muy activo"]
           ])
       ) +
+      seccionOnboarding(
+        "¿Qué actividades realizás?",
+        '<div class="lista-actividades" id="lista-actividades-onboarding">' +
+          GYMAPP.actividades.renderListaActividades(ACTIVIDADES_DEFAULT_ONBOARDING, "onb-act") +
+          "</div>"
+      ) +
       '<button type="submit" class="btn btn-primario onboarding-btn-principal">Comenzar</button>' +
       "</form>" +
       "</div>";
 
-    document.getElementById("form-onboarding").addEventListener("submit", function (ev) {
+    var form = document.getElementById("form-onboarding");
+    form.addEventListener("submit", function (ev) {
       ev.preventDefault();
       manejarSubmit(ev.target);
+    });
+    form.addEventListener("change", function (ev) {
+      if (ev.target.classList.contains("fila-actividad-checkbox")) {
+        GYMAPP.actividades.alternarVisibilidadMeta(ev.target);
+      }
     });
   }
 
@@ -107,6 +130,18 @@ GYMAPP.onboarding = (function () {
       alert("Completá todos los campos antes de continuar.");
       return;
     }
+
+    /* ACT-02: toda la selección de actividades y metas se arma/valida acá
+       con los helpers compartidos de GYMAPP.actividades, para que ningún
+       usuario nuevo pueda terminar el onboarding sin usuario.actividades
+       (el gap documentado y pendiente de ACT-01). */
+    var seleccionActividades = GYMAPP.actividades.leerSeleccionDesdeDom(form.querySelector("#lista-actividades-onboarding"));
+    var resultadoActividades = GYMAPP.actividades.construirActividades(seleccionActividades);
+    if (!resultadoActividades.ok) {
+      alert(resultadoActividades.error);
+      return;
+    }
+    usuario.actividades = resultadoActividades.actividades;
 
     usuario.metas_macros = GYMAPP.calculos.calcularMetasMacros(usuario);
 

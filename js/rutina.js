@@ -6,14 +6,14 @@ GYMAPP.rutina = (function () {
 
   function render(container) {
     var data = GYMAPP.storage.getData();
-    container.innerHTML = template(data.rutina.dias);
+    container.innerHTML = template(data.rutina.dias, data.usuario);
     if (!container.dataset.rutinaBound) {
       bindEventos(container);
       container.dataset.rutinaBound = "1";
     }
   }
 
-  function template(dias) {
+  function template(dias, usuario) {
     var listaDias = dias.length
       ? dias.map(renderDia).join("")
       : '<p class="nota">Todavía no tenés días cargados. Agregá uno manualmente o importá el PDF de tu rutina.</p>';
@@ -33,8 +33,29 @@ GYMAPP.rutina = (function () {
       '<datalist id="grupos-musculares">' +
       GRUPOS_MUSCULARES.map(function (g) { return '<option value="' + g + '"></option>'; }).join("") +
       "</datalist>" +
+      renderSeccionActividades(usuario) +
       (GYMAPP.auth ? GYMAPP.auth.renderSeccionCuenta() : "") +
       renderSeccionBackup() +
+      "</div>"
+    );
+  }
+
+  /* ACT-02: sección "Actividades y metas" para usuarios existentes. Permite
+     agregar/quitar actividades y modificar su meta semanal marcando o
+     desmarcando cada fila, reutilizando el mismo catálogo y helpers de
+     GYMAPP.actividades que usa el onboarding. Desactivar una actividad acá
+     solo saca su entrada de usuario.actividades: nunca toca rutina.dias,
+     sesiones_entrenamiento, nutrición ni medidas_corporales. */
+  function renderSeccionActividades(usuario) {
+    var actividadesUsuario = GYMAPP.actividades.obtenerActividadesUsuario(usuario);
+    return (
+      '<div class="seccion-actividades">' +
+      "<h3>Actividades y metas</h3>" +
+      '<p class="nota">Elegí qué actividades practicás y tu meta de días por semana para cada una. Desactivar una actividad no borra las sesiones ya guardadas.</p>' +
+      '<div id="actividades-mensaje" class="mensaje oculto"></div>' +
+      '<div class="lista-actividades" id="lista-actividades-usuario">' +
+      GYMAPP.actividades.renderListaActividades(actividadesUsuario, "rutina-act") +
+      "</div>" +
       "</div>"
     );
   }
@@ -116,6 +137,10 @@ GYMAPP.rutina = (function () {
         var archivoBackup = ev.target.files[0];
         ev.target.value = "";
         if (archivoBackup) manejarImportacionBackup(container, archivoBackup);
+        return;
+      }
+      if (ev.target.classList.contains("fila-actividad-checkbox") || ev.target.classList.contains("fila-actividad-meta-input")) {
+        manejarCambioActividades(container, ev.target);
         return;
       }
       actualizarCampo(container, ev.target);
@@ -222,11 +247,45 @@ GYMAPP.rutina = (function () {
     render(container);
   }
 
-  function mostrarMensaje(container, texto, tipo) {
-    var el = container.querySelector("#rutina-mensaje");
+  function mostrarMensajeEn(el, texto, tipo) {
     if (!el) return;
     el.textContent = texto;
     el.className = "mensaje " + (tipo || "info");
+  }
+
+  function mostrarMensaje(container, texto, tipo) {
+    mostrarMensajeEn(container.querySelector("#rutina-mensaje"), texto, tipo);
+  }
+
+  /* ACT-02: guarda usuario.actividades ante cualquier cambio en la sección
+     "Actividades y metas" (tildar/destildar una actividad, cambiar una
+     meta). Si la selección resultante no es válida (0 actividades, meta
+     fuera de rango o no entera) no se guarda nada: se muestra el error y
+     queda vigente la última configuración válida guardada. */
+  function manejarCambioActividades(container, target) {
+    if (target.classList.contains("fila-actividad-checkbox")) {
+      GYMAPP.actividades.alternarVisibilidadMeta(target);
+    }
+
+    var mensajeEl = container.querySelector("#actividades-mensaje");
+    var seleccion = GYMAPP.actividades.leerSeleccionDesdeDom(container.querySelector("#lista-actividades-usuario"));
+    var resultado = GYMAPP.actividades.construirActividades(seleccion);
+
+    if (!resultado.ok) {
+      mostrarMensajeEn(mensajeEl, resultado.error, "error");
+      return;
+    }
+
+    var guardado = GYMAPP.storage.updateData(function (data) {
+      data.usuario.actividades = resultado.actividades;
+    }, { alertaAutomatica: false });
+
+    if (!guardado.guardado) {
+      mostrarMensajeEn(mensajeEl, MENSAJE_ERROR_GUARDADO, "error");
+      return;
+    }
+
+    mostrarMensajeEn(mensajeEl, "", "oculto");
   }
 
   function manejarImportacionPdf(container, file) {

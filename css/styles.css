@@ -1361,6 +1361,115 @@ body {
   flex: 1;
 }
 
+/* ACT-02: selector de actividades y metas semanales (onboarding + Rutina). */
+.seccion-actividades {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-borde);
+}
+
+.seccion-actividades h3 {
+  margin: 0 0 6px;
+  font-size: 0.98rem;
+  color: var(--color-texto-secundario);
+}
+
+.lista-actividades {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fila-actividad {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: border-color var(--transicion-rapida);
+}
+
+.fila-actividad-activa {
+  border-color: var(--color-primario);
+}
+
+.fila-actividad-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.fila-actividad-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--color-primario);
+}
+
+.fila-actividad-icono {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.fila-actividad-nombre {
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fila-actividad-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.fila-actividad-meta.oculto {
+  display: none;
+}
+
+.fila-actividad-meta label {
+  font-size: 0.72rem;
+  color: var(--color-texto-secundario);
+  white-space: nowrap;
+}
+
+.fila-actividad-meta-input {
+  width: 48px;
+  background: var(--color-fondo);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.fila-actividad-meta-input:focus {
+  outline: none;
+  border-color: var(--color-primario);
+}
+
+/* Dentro del onboarding las filas quedan un tono más oscuras que la card,
+   igual que el resto de los inputs de esa pantalla (ver .pantalla-onboarding
+   .campo input más arriba). */
+.pantalla-onboarding .fila-actividad {
+  background: var(--color-fondo);
+}
+
+.pantalla-onboarding .fila-actividad-meta-input {
+  background: var(--color-superficie);
+}
+
 .saludo-dashboard {
   font-size: 1.5rem;
   margin: 0 0 16px;

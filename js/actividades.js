@@ -67,10 +67,124 @@ GYMAPP.actividades = (function () {
     return null;
   }
 
+  /* ACT-02: helpers de UI/validación compartidos entre onboarding y la
+     sección "Actividades y metas" de Rutina, para no duplicar en cada
+     pantalla el markup de una fila ni las reglas de validación.
+
+     Una "fila de actividad" es: checkbox de selección + nombre/ícono del
+     catálogo + input numérico de meta semanal, visible solo si está
+     seleccionada. Ambas pantallas renderizan las filas con
+     renderListaActividades, delegan el toggle de visibilidad a
+     alternarVisibilidadMeta, leen el estado actual del DOM con
+     leerSeleccionDesdeDom y arman/validan el arreglo final con
+     construirActividades antes de guardar. */
+
+  function renderFilaActividad(actividad, seleccionada, metaSemanal, idPrefix) {
+    var prefix = idPrefix || "act";
+    var idCheck = prefix + "-check-" + actividad.id;
+    var idMeta = prefix + "-meta-" + actividad.id;
+    return (
+      '<div class="fila-actividad' + (seleccionada ? " fila-actividad-activa" : "") + '" data-actividad-tipo="' + actividad.id + '">' +
+      '<label class="fila-actividad-toggle" for="' + idCheck + '">' +
+      '<input type="checkbox" class="fila-actividad-checkbox" id="' + idCheck + '" data-tipo="' + actividad.id + '"' + (seleccionada ? " checked" : "") + ">" +
+      '<span class="fila-actividad-icono" aria-hidden="true">' + actividad.icono + "</span>" +
+      '<span class="fila-actividad-nombre">' + actividad.nombre + "</span>" +
+      "</label>" +
+      '<div class="fila-actividad-meta' + (seleccionada ? "" : " oculto") + '">' +
+      '<label for="' + idMeta + '">Días/sem.</label>' +
+      '<input type="number" class="fila-actividad-meta-input" id="' + idMeta + '" data-tipo="' + actividad.id + '" min="1" max="7" step="1" inputmode="numeric" value="' + metaSemanal + '">' +
+      "</div>" +
+      "</div>"
+    );
+  }
+
+  /* Renderiza el catálogo completo (en su orden fijo), marcando como
+     seleccionadas las actividades presentes en `actividadesUsuario`
+     ([{tipo, meta_semanal}]) con su meta guardada. Las no presentes se
+     muestran sin marcar, con una meta sugerida de 3 por si el usuario las
+     tilda (no se persiste hasta que efectivamente las seleccione). */
+  function renderListaActividades(actividadesUsuario, idPrefix) {
+    var mapa = {};
+    (actividadesUsuario || []).forEach(function (a) { mapa[a.tipo] = a.meta_semanal; });
+    return obtenerCatalogo().map(function (actividad) {
+      var seleccionada = Object.prototype.hasOwnProperty.call(mapa, actividad.id);
+      var meta = seleccionada ? mapa[actividad.id] : 3;
+      return renderFilaActividad(actividad, seleccionada, meta, idPrefix);
+    }).join("");
+  }
+
+  /* Muestra/oculta el input de meta semanal de una fila según el estado del
+     checkbox que la controla. Puramente visual: no lee ni escribe datos. */
+  function alternarVisibilidadMeta(checkbox) {
+    var fila = checkbox.closest(".fila-actividad");
+    if (!fila) return;
+    var contenedorMeta = fila.querySelector(".fila-actividad-meta");
+    if (contenedorMeta) contenedorMeta.classList.toggle("oculto", !checkbox.checked);
+    fila.classList.toggle("fila-actividad-activa", checkbox.checked);
+  }
+
+  /* Lee del DOM, dentro de `scope`, el estado actual de cada fila de
+     actividad ya renderizada: [{tipo, activo, meta}], donde `meta` es el
+     valor numérico del input (NaN si está vacío o no es un número). No
+     valida nada, solo traduce el DOM a datos: la validación la hace
+     construirActividades. */
+  function leerSeleccionDesdeDom(scope) {
+    var seleccion = [];
+    if (!scope) return seleccion;
+    var checkboxes = scope.querySelectorAll(".fila-actividad-checkbox");
+    for (var i = 0; i < checkboxes.length; i++) {
+      var checkbox = checkboxes[i];
+      var fila = checkbox.closest(".fila-actividad");
+      var metaInput = fila ? fila.querySelector(".fila-actividad-meta-input") : null;
+      var raw = metaInput ? String(metaInput.value).trim() : "";
+      var meta = raw === "" ? NaN : Number(raw);
+      seleccion.push({ tipo: checkbox.dataset.tipo, activo: checkbox.checked, meta: meta });
+    }
+    return seleccion;
+  }
+
+  /* Arma el usuario.actividades final a partir de una selección cruda
+     ([{tipo, activo, meta}], en cualquier orden), aplicando las reglas de
+     ACT-02: al menos 1 actividad activa; meta entera entre 1 y 7; sin
+     duplicados (garantizado por catálogo, un id por vuelta); resultado en
+     el orden del catálogo, no en el orden en que el usuario clickeó.
+     Devuelve { ok:true, actividades } o { ok:false, error }. */
+  function construirActividades(seleccion) {
+    var porTipo = {};
+    (seleccion || []).forEach(function (s) { porTipo[s.tipo] = s; });
+
+    var resultado = [];
+    var catalogo = obtenerCatalogo();
+    for (var i = 0; i < catalogo.length; i++) {
+      var actividad = catalogo[i];
+      var item = porTipo[actividad.id];
+      if (!item || !item.activo) continue;
+
+      var meta = item.meta;
+      if (typeof meta !== "number" || !Number.isInteger(meta)) {
+        return { ok: false, error: "La meta semanal de " + actividad.nombre + " debe ser un número entero." };
+      }
+      if (meta < 1 || meta > 7) {
+        return { ok: false, error: "La meta semanal de " + actividad.nombre + " debe estar entre 1 y 7 días." };
+      }
+      resultado.push({ tipo: actividad.id, meta_semanal: meta });
+    }
+
+    if (resultado.length === 0) {
+      return { ok: false, error: "Elegí al menos una actividad." };
+    }
+
+    return { ok: true, actividades: resultado };
+  }
+
   return {
     obtenerCatalogo: obtenerCatalogo,
     obtenerActividadPorId: obtenerActividadPorId,
     obtenerActividadesUsuario: obtenerActividadesUsuario,
-    obtenerDetalleSesion: obtenerDetalleSesion
+    obtenerDetalleSesion: obtenerDetalleSesion,
+    renderListaActividades: renderListaActividades,
+    alternarVisibilidadMeta: alternarVisibilidadMeta,
+    leerSeleccionDesdeDom: leerSeleccionDesdeDom,
+    construirActividades: construirActividades
   };
 })();
