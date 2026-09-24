@@ -4,14 +4,19 @@ var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 GYMAPP.nutricion = (function () {
   var esc = GYMAPP.util.escapeHtml;
 
-  /* Estado efímero de UI (no persiste): texto buscado y formulario "alimento nuevo" abierto, por índice de comida. */
-  var estado = { busquedas: {}, formularioNuevo: {} };
+  /* Estado efímero de UI (no persiste): texto buscado y formulario "alimento
+     nuevo" abierto (por índice de comida, relativos al día que se está
+     viendo), y la fecha actualmente seleccionada (NUT-01). Null hasta que
+     el usuario elige otra: obtenerFechaSeleccionada() la resuelve a "hoy"
+     por defecto sin necesidad de inicializarla al cargar el módulo. */
+  var estado = { busquedas: {}, formularioNuevo: {}, fechaSeleccionada: null };
 
   function render(container) {
     var data = GYMAPP.storage.getData();
-    var registro = buscarRegistroHoy(data) || registroVacio();
+    var fecha = obtenerFechaSeleccionada();
+    var registro = buscarRegistroPorFecha(data, fecha) || registroVacio(fecha);
 
-    container.innerHTML = template(data, registro);
+    container.innerHTML = template(data, registro, fecha);
     if (!container.dataset.nutricionBound) {
       bindEventos(container);
       container.dataset.nutricionBound = "1";
@@ -19,19 +24,27 @@ GYMAPP.nutricion = (function () {
     dibujarGraficoSemana(container, data);
   }
 
-  /* --- Fecha y registro del día --- */
+  /* --- Fecha y registro del día (NUT-01: cualquier día, no solo hoy) ---
+     Todas las funciones de esta pantalla operan sobre obtenerFechaSeleccionada(),
+     nunca sobre "hoy" a secas: así se pueden cargar/corregir días anteriores
+     sin duplicar registros ni pisar el registro de otro día. El Dashboard
+     no se ve afectado por nada de esto: calcula "hoy" de forma totalmente
+     independiente (ver dashboard.js), no lee este estado de UI. */
 
   function fechaHoyISO() {
     var d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
-  function registroVacio() {
-    return { fecha: fechaHoyISO(), comidas: [], totales_calculados: { calorias: 0, proteinas_g: 0, carbos_g: 0, grasas_g: 0 }, cumplimiento: null };
+  function obtenerFechaSeleccionada() {
+    return estado.fechaSeleccionada || fechaHoyISO();
   }
 
-  function buscarRegistroHoy(data) {
-    var fecha = fechaHoyISO();
+  function registroVacio(fecha) {
+    return { fecha: fecha, comidas: [], totales_calculados: { calorias: 0, proteinas_g: 0, carbos_g: 0, grasas_g: 0 }, cumplimiento: null };
+  }
+
+  function buscarRegistroPorFecha(data, fecha) {
     return data.registros_nutricion.filter(function (r) { return r.fecha === fecha; })[0] || null;
   }
 
@@ -57,14 +70,17 @@ GYMAPP.nutricion = (function () {
 
   var MENSAJE_ERROR_GUARDADO = "No se pudo guardar el cambio. Revisá el espacio disponible en tu dispositivo e intentá de nuevo.";
 
-  /* Crea el registro de hoy si no existe, aplica `mutador(registro, data)` y recalcula los totales.
-     Devuelve true si se guardó correctamente; si falla, avisa al usuario y devuelve false. */
-  function mutarRegistroHoy(container, mutador) {
+  /* Crea el registro del día SELECCIONADO si no existe (nunca uno de otro
+     día), aplica `mutador(registro, data)` y recalcula los totales. Si ya
+     existe un registro para esa fecha, se edita ese mismo (nunca duplica).
+     Devuelve true si se guardó correctamente; si falla, avisa al usuario y
+     devuelve false. */
+  function mutarRegistroSeleccionado(container, mutador) {
+    var fecha = obtenerFechaSeleccionada();
     var resultado = GYMAPP.storage.updateData(function (data) {
-      var fecha = fechaHoyISO();
       var registro = data.registros_nutricion.filter(function (r) { return r.fecha === fecha; })[0];
       if (!registro) {
-        registro = registroVacio();
+        registro = registroVacio(fecha);
         data.registros_nutricion.push(registro);
       }
       mutador(registro, data);
@@ -87,13 +103,18 @@ GYMAPP.nutricion = (function () {
 
   /* --- Templates --- */
 
-  function template(data, registro) {
+  function template(data, registro, fecha) {
     var metas = data.usuario.metas_macros;
     var totales = registro.totales_calculados;
 
     return (
       '<div class="pantalla pantalla-nutricion">' +
       "<h2>Nutrición</h2>" +
+      '<div class="campo campo-fecha-nutricion">' +
+      '<label for="input-fecha-nutricion">Día</label>' +
+      '<input type="date" id="input-fecha-nutricion" value="' + fecha + '" max="' + fechaHoyISO() + '" />' +
+      "</div>" +
+      renderAvisoDiaAnterior(fecha) +
       '<div id="nutricion-mensaje" class="mensaje oculto"></div>' +
       '<div class="resumen-nutricion">' +
       filaMacro("Calorías", totales.calorias, metas.calorias, "kcal") +
@@ -105,7 +126,7 @@ GYMAPP.nutricion = (function () {
       '<div class="comidas-lista">' +
       (registro.comidas.length
         ? registro.comidas.map(function (c, i) { return renderComida(c, i, data.base_alimentos); }).join("")
-        : '<p class="nota">Todavía no cargaste comidas hoy.</p>') +
+        : '<p class="nota">Todavía no cargaste comidas para este día.</p>') +
       "</div>" +
       '<button type="button" data-accion="nueva-comida" class="btn btn-secundario btn-ancho">+ Agregar comida</button>' +
       '<button type="button" data-accion="cerrar-dia" class="btn btn-primario">Cerrar día</button>' +
@@ -113,6 +134,17 @@ GYMAPP.nutricion = (function () {
       '<div class="grafico-contenedor"><canvas id="grafico-nutricion-7dias"></canvas></div>' +
       "</div>"
     );
+  }
+
+  /* Aviso discreto de que se está editando un día pasado (mejora visual
+     mínima pedida además de NUT-01). Sin new Date()/UTC: la fecha ya viene
+     como string "YYYY-MM-DD", se reformatea con un simple split para no
+     arriesgar un corrimiento de día por zona horaria. */
+  function renderAvisoDiaAnterior(fecha) {
+    if (fecha === fechaHoyISO()) return "";
+    var partes = fecha.split("-");
+    var fechaLegible = partes[2] + "/" + partes[1] + "/" + partes[0];
+    return '<p class="nota nota-dia-anterior">Editando: ' + fechaLegible + "</p>";
   }
 
   function filaMacro(nombre, real, objetivo, unidad) {
@@ -252,7 +284,7 @@ GYMAPP.nutricion = (function () {
   /* --- Acciones --- */
 
   function agregarComida(container) {
-    var exito = mutarRegistroHoy(container, function (registro) {
+    var exito = mutarRegistroSeleccionado(container, function (registro) {
       registro.comidas.push({ nombre: "Comida " + (registro.comidas.length + 1), alimentos: [] });
     });
     if (!exito) return;
@@ -261,7 +293,7 @@ GYMAPP.nutricion = (function () {
 
   function borrarComida(container, indice) {
     if (!confirm("¿Borrar esta comida y sus alimentos?")) return;
-    var exito = mutarRegistroHoy(container, function (registro) {
+    var exito = mutarRegistroSeleccionado(container, function (registro) {
       registro.comidas.splice(parseInt(indice, 10), 1);
     });
     if (!exito) return;
@@ -269,13 +301,13 @@ GYMAPP.nutricion = (function () {
   }
 
   function agregarAlimentoAComida(container, comidaIndex, alimentoId) {
-    return mutarRegistroHoy(container, function (registro) {
+    return mutarRegistroSeleccionado(container, function (registro) {
       registro.comidas[parseInt(comidaIndex, 10)].alimentos.push({ alimento_id: alimentoId, cantidad_g: 100 });
     });
   }
 
   function borrarAlimentoDeComida(container, comidaIndex, alimentoIndex) {
-    var exito = mutarRegistroHoy(container, function (registro) {
+    var exito = mutarRegistroSeleccionado(container, function (registro) {
       registro.comidas[parseInt(comidaIndex, 10)].alimentos.splice(parseInt(alimentoIndex, 10), 1);
     });
     if (!exito) return;
@@ -319,12 +351,12 @@ GYMAPP.nutricion = (function () {
 
   function cerrarDia(container) {
     var data = GYMAPP.storage.getData();
-    var registro = buscarRegistroHoy(data);
+    var registro = buscarRegistroPorFecha(data, obtenerFechaSeleccionada());
     if (!registro || !registro.comidas.length) {
       mostrarMensaje(container, "Cargá al menos una comida antes de cerrar el día.", "error");
       return;
     }
-    var exito = mutarRegistroHoy(container, function (r, d) {
+    var exito = mutarRegistroSeleccionado(container, function (r, d) {
       r.cumplimiento = calcularCumplimiento(r.totales_calculados.calorias, d.usuario.metas_macros.calorias);
     });
     if (!exito) return;
@@ -348,13 +380,13 @@ GYMAPP.nutricion = (function () {
 
   /* Persiste la cantidad y refresca solo el kcal de la fila y el resumen de macros, sin re-renderizar todo. */
   function actualizarCantidadAlimento(container, comidaIndex, alimentoIndex, cantidad) {
-    var exito = mutarRegistroHoy(container, function (registro) {
+    var exito = mutarRegistroSeleccionado(container, function (registro) {
       registro.comidas[parseInt(comidaIndex, 10)].alimentos[parseInt(alimentoIndex, 10)].cantidad_g = cantidad;
     });
     if (!exito) return;
 
     var data = GYMAPP.storage.getData();
-    var registro = buscarRegistroHoy(data);
+    var registro = buscarRegistroPorFecha(data, obtenerFechaSeleccionada());
     if (!registro) return;
 
     var fila = container.querySelector('.alimento-fila[data-comida-index="' + comidaIndex + '"][data-alimento-index="' + alimentoIndex + '"]');
@@ -440,7 +472,7 @@ GYMAPP.nutricion = (function () {
       if (target.classList.contains("input-nombre-comida")) {
         var tarjetaComida = target.closest("[data-comida-index]");
         var idxComida = tarjetaComida.dataset.comidaIndex;
-        mutarRegistroHoy(container, function (registro) {
+        mutarRegistroSeleccionado(container, function (registro) {
           registro.comidas[parseInt(idxComida, 10)].nombre = target.value;
         });
         return;
@@ -450,6 +482,24 @@ GYMAPP.nutricion = (function () {
         var fila = target.closest("[data-alimento-index]");
         actualizarCantidadAlimento(container, fila.dataset.comidaIndex, fila.dataset.alimentoIndex, parseFloat(target.value) || 0);
       }
+    });
+
+    /* Selector de día (NUT-01): "change", no "input", para no re-renderizar
+       en cada tecleo manual de la fecha, solo al confirmar un valor. Nunca
+       permite una fecha futura (además del atributo max, defensivo por si
+       el navegador dejara tipear una a mano). Cambiar de día limpia el
+       estado efímero de búsqueda/formulario nuevo: esos índices son
+       relativos a las comidas del día que se estaba viendo, y dejan de
+       tener sentido al cambiar de registro. */
+    container.addEventListener("change", function (ev) {
+      if (ev.target.id !== "input-fecha-nutricion") return;
+      var hoy = fechaHoyISO();
+      var valor = ev.target.value;
+      if (!valor || valor > hoy) valor = hoy;
+      estado.fechaSeleccionada = valor;
+      estado.busquedas = {};
+      estado.formularioNuevo = {};
+      render(container);
     });
   }
 
