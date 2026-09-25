@@ -37,31 +37,6 @@ GYMAPP.dashboard = (function () {
 
   /* --- Cálculos --- */
 
-  function construirMapaDiasEntrenados(sesiones) {
-    var acumulado = {};
-    sesiones.forEach(function (s) {
-      var key = GYMAPP.util.fechaLocalISO(s.fecha);
-      if (!acumulado[key]) acumulado[key] = { gimnasio: false, futbol: false };
-      if (s.tipo === "gimnasio") acumulado[key].gimnasio = true;
-      if (s.tipo === "futbol") acumulado[key].futbol = true;
-    });
-    var resultado = {};
-    Object.keys(acumulado).forEach(function (key) {
-      var d = acumulado[key];
-      resultado[key] = d.gimnasio && d.futbol ? "ambos" : (d.gimnasio ? "gimnasio" : "futbol");
-    });
-    return resultado;
-  }
-
-  /* --- Progreso semanal por tipo (DASH-07) ---
-     Metas fijas de días únicos por semana calendario (lunes a domingo,
-     mismo rango que renderTiraSemana). Reutiliza construirMapaDiasEntrenados
-     (ya cuenta días únicos, no sesiones) para que "gimnasio+fútbol el mismo
-     día" sume 1 a cada meta y "dos sesiones del mismo tipo el mismo día" no
-     duplique el avance: ambas reglas ya las garantiza ese mapa. */
-  var META_GIMNASIO_SEMANAL = 5;
-  var META_FUTBOL_SEMANAL = 2;
-
   function obtenerDiasSemanaActualISO() {
     var hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -77,29 +52,42 @@ GYMAPP.dashboard = (function () {
     return dias;
   }
 
-  function calcularProgresoSemanal(sesiones) {
+  /* ACT-04: metas de días únicos por semana calendario (lunes a domingo,
+     mismo rango que renderTiraSemana), una por cada actividad configurada en
+     usuario.actividades (nunca una lista fija de 2). Usa el mapa compartido
+     GYMAPP.actividades.obtenerActividadesPorDia, que ya cuenta días únicos
+     (no sesiones), así que "gimnasio+pádel el mismo día" suma 1 a cada meta
+     y "dos sesiones del mismo tipo el mismo día" no duplica el avance.
+     Una actividad desactivada simplemente no aparece (no está en
+     usuario.actividades), pero su historial sigue intacto y sigue contando
+     para racha/días activos en otro lado. */
+  function calcularProgresoSemanal(data) {
     var diasSemana = obtenerDiasSemanaActualISO();
-    var mapaDias = construirMapaDiasEntrenados(sesiones);
-    var gimnasio = 0;
-    var futbol = 0;
+    var mapaDias = GYMAPP.actividades.obtenerActividadesPorDia(data.sesiones_entrenamiento);
+    var actividadesUsuario = GYMAPP.actividades.obtenerActividadesUsuario(data.usuario);
 
-    diasSemana.forEach(function (key) {
-      var estado = mapaDias[key];
-      if (!estado) return;
-      if (estado === "gimnasio" || estado === "ambos") gimnasio++;
-      if (estado === "futbol" || estado === "ambos") futbol++;
+    return actividadesUsuario.map(function (a) {
+      var actual = 0;
+      diasSemana.forEach(function (key) {
+        var tiposDelDia = mapaDias[key] || [];
+        if (tiposDelDia.indexOf(a.tipo) !== -1) actual++;
+      });
+      var actividad = GYMAPP.actividades.obtenerActividadPorId(a.tipo);
+      return {
+        tipo: a.tipo,
+        nombre: actividad ? actividad.nombre : a.tipo,
+        icono: actividad ? actividad.icono : "🏃",
+        color: actividad ? actividad.color : "var(--color-texto-secundario)",
+        actual: actual,
+        meta: a.meta_semanal
+      };
     });
-
-    return {
-      gimnasio: { actual: gimnasio, meta: META_GIMNASIO_SEMANAL },
-      futbol: { actual: futbol, meta: META_FUTBOL_SEMANAL }
-    };
   }
 
   function calcularResumenSemanal(data) {
     var dias7 = ultimosNDiasISO(7);
     var sesiones7 = data.sesiones_entrenamiento.filter(function (s) { return dias7.indexOf(GYMAPP.util.fechaLocalISO(s.fecha)) !== -1; });
-    var diasActivos7 = Object.keys(construirMapaDiasEntrenados(sesiones7)).length;
+    var diasActivos7 = Object.keys(GYMAPP.actividades.obtenerActividadesPorDia(sesiones7)).length;
     var registros7 = data.registros_nutricion.filter(function (r) { return dias7.indexOf(r.fecha) !== -1 && r.cumplimiento; });
     var enObjetivo = registros7.filter(function (r) { return r.cumplimiento === "en_objetivo"; }).length;
 
@@ -172,12 +160,14 @@ GYMAPP.dashboard = (function () {
     return data.registros_nutricion.filter(function (r) { return r.fecha === hoy; })[0] || null;
   }
 
-  /* "gimnasio" | "futbol" | "ambos" | null (todavía no entrenó hoy).
-     Reutiliza construirMapaDiasEntrenados (PRO-01/02), que ya agrupa por
-     día calendario LOCAL en vez de UTC. */
-  function obtenerEstadoEntrenoHoy(data) {
-    var mapa = construirMapaDiasEntrenados(data.sesiones_entrenamiento);
-    return mapa[fechaISO(new Date())] || null;
+  /* ACT-04: array de tipos entrenados hoy (nunca duplicado por tipo), en
+     orden de catálogo. [] si todavía no entrenó ninguna actividad hoy.
+     Reutiliza el mapa compartido (agrupa por día calendario LOCAL, no UTC),
+     e incluye cualquier actividad con sesión hoy aunque ya no esté
+     configurada en usuario.actividades. */
+  function obtenerActividadesHoy(data) {
+    var mapa = GYMAPP.actividades.obtenerActividadesPorDia(data.sesiones_entrenamiento);
+    return mapa[fechaISO(new Date())] || [];
   }
 
   /* --- Peso corporal (DASH-05) --- */
@@ -207,9 +197,9 @@ GYMAPP.dashboard = (function () {
     var proximoDia = calcularProximoDia(data);
     var gruposRepetidos = calcularAlertaGrupoMuscular(data);
     var registroHoy = obtenerRegistroHoy(data);
-    var estadoEntrenoHoy = obtenerEstadoEntrenoHoy(data);
+    var tiposHoy = obtenerActividadesHoy(data);
     var variacionPeso = calcularVariacionPeso(data.medidas_corporales);
-    var progresoSemanal = calcularProgresoSemanal(data.sesiones_entrenamiento);
+    var progresoSemanal = calcularProgresoSemanal(data);
 
     return (
       '<div class="pantalla pantalla-dashboard">' +
@@ -219,7 +209,7 @@ GYMAPP.dashboard = (function () {
       renderAlerta(gruposRepetidos) +
       '<div class="dashboard-layout">' +
       '<div class="dashboard-columna-principal">' +
-      renderSeccionHoy(metas, registroHoy, estadoEntrenoHoy) +
+      renderSeccionHoy(metas, registroHoy, tiposHoy) +
       renderSeccionResumenSemanal(data.sesiones_entrenamiento, resumen, rachas) +
       "</div>" +
       '<div class="dashboard-columna-lateral">' +
@@ -231,12 +221,15 @@ GYMAPP.dashboard = (function () {
     );
   }
 
-  /* --- Hero semanal (DASH-07/08) ---
-     Dos anillos SVG (gimnasio y fútbol) con el progreso de días únicos de
-     esta semana calendario contra la meta fija. Se arma como markup con el
-     stroke-dashoffset ya calculado, sin necesidad de un paso de dibujo por
-     JS después del innerHTML (a diferencia de Chart.js): es la opción más
-     liviana y robusta para dos anillos estáticos por render. */
+  /* --- Hero semanal (DASH-07/08, generalizado en ACT-04) ---
+     Un anillo SVG por cada actividad configurada (1 a 6), con el progreso de
+     días únicos de esta semana calendario contra su meta_semanal. Se arma
+     como markup con el stroke-dashoffset ya calculado, sin necesidad de un
+     paso de dibujo por JS después del innerHTML (a diferencia de Chart.js):
+     es la opción más liviana y robusta para anillos estáticos por render.
+     El color de cada anillo sale de la metadata del catálogo (item.color),
+     nunca de una clase CSS por deporte: agregar una actividad nueva no
+     requiere tocar el CSS del hero. */
   var RADIO_ANILLO = 42;
   var CIRCUNFERENCIA_ANILLO = 2 * Math.PI * RADIO_ANILLO;
 
@@ -246,15 +239,14 @@ GYMAPP.dashboard = (function () {
       '<span class="dashboard-hero-eyebrow">Meta semanal</span>' +
       "<h2 class=\"dashboard-hero-titulo\">Progreso de esta semana</h2>" +
       '<div class="dashboard-hero-anillos">' +
-      renderAnillo(progresoSemanal.gimnasio, "gimnasio", "Gimnasio", "🏋️") +
-      renderAnillo(progresoSemanal.futbol, "futbol", "Fútbol", "⚽") +
+      progresoSemanal.map(renderAnillo).join("") +
       "</div>" +
       "</div>"
     );
   }
 
-  function renderAnillo(valor, tipoClase, etiqueta, icono) {
-    var pct = valor.meta > 0 ? Math.min(1, valor.actual / valor.meta) : 0;
+  function renderAnillo(item) {
+    var pct = item.meta > 0 ? Math.min(1, item.actual / item.meta) : 0;
     var dashoffset = CIRCUNFERENCIA_ANILLO * (1 - pct);
 
     return (
@@ -262,12 +254,12 @@ GYMAPP.dashboard = (function () {
       '<div class="anillo-svg-wrap">' +
       '<svg class="anillo-svg" viewBox="0 0 100 100" aria-hidden="true">' +
       '<circle class="anillo-fondo" cx="50" cy="50" r="' + RADIO_ANILLO + '"></circle>' +
-      '<circle class="anillo-progreso anillo-' + tipoClase + '" cx="50" cy="50" r="' + RADIO_ANILLO +
-      '" stroke-dasharray="' + CIRCUNFERENCIA_ANILLO.toFixed(2) + '" stroke-dashoffset="' + dashoffset.toFixed(2) + '"></circle>' +
+      '<circle class="anillo-progreso" cx="50" cy="50" r="' + RADIO_ANILLO + '" style="stroke:' + item.color + '"' +
+      ' stroke-dasharray="' + CIRCUNFERENCIA_ANILLO.toFixed(2) + '" stroke-dashoffset="' + dashoffset.toFixed(2) + '"></circle>' +
       "</svg>" +
-      '<div class="anillo-valor">' + valor.actual + '<span class="anillo-valor-meta">/' + valor.meta + "</span></div>" +
+      '<div class="anillo-valor">' + item.actual + '<span class="anillo-valor-meta">/' + item.meta + "</span></div>" +
       "</div>" +
-      '<span class="anillo-etiqueta">' + icono + " " + esc(etiqueta) + "</span>" +
+      '<span class="anillo-etiqueta">' + item.icono + " " + esc(item.nombre) + "</span>" +
       "</div>"
     );
   }
@@ -284,7 +276,7 @@ GYMAPP.dashboard = (function () {
 
   /* --- Sección "Hoy" (DASH-02) --- */
 
-  function renderSeccionHoy(metas, registroHoy, estadoEntrenoHoy) {
+  function renderSeccionHoy(metas, registroHoy, tiposHoy) {
     var contenidoNutricion = registroHoy
       ? filaMacroDashboard("Calorías", registroHoy.totales_calculados.calorias, metas.calorias, "kcal") +
         filaMacroDashboard("Proteínas", registroHoy.totales_calculados.proteinas_g, metas.proteinas_g, "g") +
@@ -296,7 +288,7 @@ GYMAPP.dashboard = (function () {
       '<div class="dashboard-panel">' +
       "<h3>Hoy</h3>" +
       contenidoNutricion +
-      renderEstadoEntrenoHoy(estadoEntrenoHoy) +
+      renderEstadoEntrenoHoy(tiposHoy) +
       "</div>"
     );
   }
@@ -321,15 +313,18 @@ GYMAPP.dashboard = (function () {
     );
   }
 
-  var ETIQUETAS_ENTRENO_HOY = {
-    gimnasio: "🏋️ Entrenaste gimnasio hoy",
-    futbol: "⚽ Jugaste al fútbol hoy",
-    ambos: "🏋️⚽ Entrenaste gimnasio y fútbol hoy"
-  };
-
-  function renderEstadoEntrenoHoy(estadoEntrenoHoy) {
-    if (estadoEntrenoHoy) {
-      return '<p class="dashboard-estado-entreno">' + ETIQUETAS_ENTRENO_HOY[estadoEntrenoHoy] + "</p>";
+  /* ACT-04: etiqueta dinámica según qué actividades (0 a N) se entrenaron
+     hoy, usando nombre/ícono del catálogo. Una sola actividad muestra su
+     nombre solo; varias se listan todas separadas por " · ", sin duplicar
+     si hubo más de una sesión del mismo tipo (tiposHoy ya viene sin
+     duplicados, ver obtenerActividadesHoy). */
+  function renderEstadoEntrenoHoy(tiposHoy) {
+    if (tiposHoy && tiposHoy.length) {
+      var etiquetas = tiposHoy.map(function (t) {
+        var actividad = GYMAPP.actividades.obtenerActividadPorId(t);
+        return actividad ? actividad.icono + " " + esc(actividad.nombre) : esc(t);
+      });
+      return '<p class="dashboard-estado-entreno">Hoy: ' + etiquetas.join(" · ") + "</p>";
     }
     return (
       '<div class="dashboard-estado-vacio dashboard-estado-vacio-compacto">' +
@@ -421,9 +416,15 @@ GYMAPP.dashboard = (function () {
     );
   }
 
+  /* ACT-04: generalizada a N actividades (ya no gimnasio/fútbol/ambos). Cada
+     columna muestra el número del día y un badge por actividad distinta ese
+     día (nunca uno por sesión), igual criterio y mismo markup que el
+     calendario de Progreso (ver GYMAPP.actividades.renderBadgesActividad,
+     compartido entre ambas pantallas). Un día con varias actividades sigue
+     contando como 1 solo día activo en el resto de los cálculos. */
   function renderTiraSemana(sesiones) {
     var etiquetas = ["L", "M", "M", "J", "V", "S", "D"];
-    var mapaDias = construirMapaDiasEntrenados(sesiones);
+    var mapaDias = GYMAPP.actividades.obtenerActividadesPorDia(sesiones);
     var hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     var hoyIso = fechaISO(hoy);
@@ -436,13 +437,16 @@ GYMAPP.dashboard = (function () {
       var d = new Date(lunes);
       d.setDate(d.getDate() + i);
       var key = fechaISO(d);
-      var estado = mapaDias[key] || null;
-      var clase = "calendario-dia" + (estado ? " " + estado : "") + (key === hoyIso ? " hoy" : "");
+      var tipos = mapaDias[key] || [];
+      var clase = "calendario-dia" + (tipos.length ? " con-actividad" : "") + (key === hoyIso ? " hoy" : "");
 
       columnas += (
         '<div class="tira-semana-col">' +
         '<span class="tira-semana-letra">' + etiquetas[i] + "</span>" +
-        '<span class="' + clase + '">' + d.getDate() + "</span>" +
+        '<span class="' + clase + '">' +
+        '<span class="calendario-dia-numero">' + d.getDate() + "</span>" +
+        GYMAPP.actividades.renderBadgesActividad(tipos) +
+        "</span>" +
         "</div>"
       );
     }
@@ -541,11 +545,10 @@ GYMAPP.dashboard = (function () {
   return {
     render: render,
     /* Expuestas para pruebas unitarias. */
-    construirMapaDiasEntrenados: construirMapaDiasEntrenados,
     calcularResumenSemanal: calcularResumenSemanal,
     calcularProgresoSemanal: calcularProgresoSemanal,
     calcularAlertaGrupoMuscular: calcularAlertaGrupoMuscular,
     calcularVariacionPeso: calcularVariacionPeso,
-    obtenerEstadoEntrenoHoy: obtenerEstadoEntrenoHoy
+    obtenerActividadesHoy: obtenerActividadesHoy
   };
 })();

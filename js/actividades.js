@@ -28,14 +28,18 @@ GYMAPP.actividades = (function () {
        todos los deportes y nunca van acá (se guardan siempre en la sesión,
        no en detalle). Valores posibles: "tipoSesion" (entrenamiento/
        partido), "posicion", "minutosJugados" (fútbol), "distancia"/"estilo"
-       (natación, con su propio formulario por ser distinto al resto). */
+       (natación, con su propio formulario por ser distinto al resto).
+     - color: metadata visual estable (ACT-04), para que Dashboard/Progreso
+       diferencien actividades (anillos, badges del calendario, leyenda) sin
+       hardcodear colores ni una clase CSS por deporte en esos archivos.
+       Gimnasio y fútbol reutilizan las variables de marca ya existentes. */
   var CATALOGO = {
-    gimnasio: { id: "gimnasio", nombre: "Gimnasio", icono: "🏋️", modoRutina: true, campos: [] },
-    futbol: { id: "futbol", nombre: "Fútbol", icono: "⚽", modoRutina: false, campos: ["tipoSesion", "posicion", "minutosJugados"] },
-    basquet: { id: "basquet", nombre: "Básquet", icono: "🏀", modoRutina: false, campos: ["tipoSesion"] },
-    natacion: { id: "natacion", nombre: "Natación", icono: "🏊", modoRutina: false, campos: ["distancia", "estilo"] },
-    padel: { id: "padel", nombre: "Pádel", icono: "🎾", modoRutina: false, campos: ["tipoSesion"] },
-    tenis: { id: "tenis", nombre: "Tenis", icono: "🎾", modoRutina: false, campos: ["tipoSesion"] }
+    gimnasio: { id: "gimnasio", nombre: "Gimnasio", icono: "🏋️", modoRutina: true, campos: [], color: "var(--color-primario)" },
+    futbol: { id: "futbol", nombre: "Fútbol", icono: "⚽", modoRutina: false, campos: ["tipoSesion", "posicion", "minutosJugados"], color: "var(--color-celeste)" },
+    basquet: { id: "basquet", nombre: "Básquet", icono: "🏀", modoRutina: false, campos: ["tipoSesion"], color: "#FF9F43" },
+    natacion: { id: "natacion", nombre: "Natación", icono: "🏊", modoRutina: false, campos: ["distancia", "estilo"], color: "#2FE0C8" },
+    padel: { id: "padel", nombre: "Pádel", icono: "🎾", modoRutina: false, campos: ["tipoSesion"], color: "#B388FF" },
+    tenis: { id: "tenis", nombre: "Tenis", icono: "🎾", modoRutina: false, campos: ["tipoSesion"], color: "#FFD93D" }
   };
 
   /* Catálogo completo, en el orden sugerido. */
@@ -69,6 +73,61 @@ GYMAPP.actividades = (function () {
     if (sesion.detalle) return sesion.detalle;
     if (sesion.tipo === "futbol" && sesion.futbol_detalle) return sesion.futbol_detalle;
     return null;
+  }
+
+  /* ACT-04: mapa { "YYYY-MM-DD": ["gimnasio", "padel", ...] } compartido por
+     Dashboard y Progreso (metas semanales, rachas, "hoy", calendario), para
+     no duplicar esta lógica entre ambos archivos.
+     - Agrupa por día LOCAL (GYMAPP.util.fechaLocalISO), no UTC.
+     - Un mismo tipo nunca se repite dentro de un día, sea cual sea la
+       cantidad de sesiones de esa actividad ese día.
+     - El orden de las actividades dentro de cada día sigue el orden del
+       catálogo (estable para renderizar anillos/badges siempre igual),
+       con cualquier tipo que ya no esté en el catálogo al final.
+     - No depende de usuario.actividades en absoluto: se arma pura y
+       exclusivamente desde las sesiones, así que una actividad ya
+       desactivada sigue apareciendo si tiene historial. */
+  function obtenerActividadesPorDia(sesiones) {
+    var mapa = {};
+    (sesiones || []).forEach(function (s) {
+      if (!s || !s.fecha || !s.tipo) return;
+      var key = GYMAPP.util.fechaLocalISO(s.fecha);
+      if (!mapa[key]) mapa[key] = [];
+      if (mapa[key].indexOf(s.tipo) === -1) mapa[key].push(s.tipo);
+    });
+    Object.keys(mapa).forEach(function (key) {
+      mapa[key] = ordenarPorCatalogo(mapa[key]);
+    });
+    return mapa;
+  }
+
+  function ordenarPorCatalogo(tipos) {
+    return tipos.slice().sort(function (a, b) {
+      var ia = ORDEN.indexOf(a);
+      var ib = ORDEN.indexOf(b);
+      if (ia === -1 && ib === -1) return 0;
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+  }
+
+  /* ACT-04: fila de badges de color (uno por actividad, sin duplicar por
+     tipo) para una celda de calendario/día. La usan tanto la tira semanal
+     de Dashboard como el calendario mensual de Progreso, para no duplicar
+     este markup en los dos archivos. `tipos` es un array como los que
+     devuelve obtenerActividadesPorDia (ya deduplicado y ordenado). */
+  function renderBadgesActividad(tipos) {
+    if (!tipos || !tipos.length) return "";
+    return (
+      '<span class="calendario-dia-badges">' +
+      tipos.map(function (t) {
+        var actividad = obtenerActividadPorId(t);
+        var color = actividad ? actividad.color : "var(--color-texto-secundario)";
+        return '<span class="calendario-dia-badge" style="background-color:' + color + '"></span>';
+      }).join("") +
+      "</span>"
+    );
   }
 
   /* ACT-02: helpers de UI/validación compartidos entre onboarding y la
@@ -186,6 +245,8 @@ GYMAPP.actividades = (function () {
     obtenerActividadPorId: obtenerActividadPorId,
     obtenerActividadesUsuario: obtenerActividadesUsuario,
     obtenerDetalleSesion: obtenerDetalleSesion,
+    obtenerActividadesPorDia: obtenerActividadesPorDia,
+    renderBadgesActividad: renderBadgesActividad,
     renderListaActividades: renderListaActividades,
     alternarVisibilidadMeta: alternarVisibilidadMeta,
     leerSeleccionDesdeDom: leerSeleccionDesdeDom,

@@ -917,8 +917,10 @@ body {
 .calendario-dia {
   aspect-ratio: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   border-radius: 8px;
   background: var(--color-borde);
   color: var(--color-texto-secundario);
@@ -934,23 +936,36 @@ body {
   outline-offset: 2px;
 }
 
-.calendario-dia.gimnasio {
-  background: var(--color-primario);
-  color: #fff;
+/* ACT-04: usado tanto por el calendario de Progreso como por la tira
+   semanal de "Esta semana" en Dashboard, con badges de color por actividad
+   en vez del modelo cerrado gimnasio/fútbol/ambos. Un solo modificador
+   genérico ("hay actividad ese día"), nunca uno por deporte: el color de
+   cada badge sale de la metadata del catálogo (ver actividades.js), no de
+   CSS. */
+.calendario-dia.con-actividad {
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  color: var(--color-texto);
   font-weight: 600;
 }
 
-.calendario-dia.futbol {
-  background: var(--color-texto);
-  color: #0a0a0a;
-  font-weight: 600;
+.calendario-dia-numero {
+  line-height: 1;
 }
 
-.calendario-dia.ambos {
-  background: var(--color-primario);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: inset 0 0 0 2px var(--color-texto);
+.calendario-dia-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.calendario-dia-badge {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .heatmap-leyenda {
@@ -1553,23 +1568,30 @@ body {
   font-size: 1.15rem;
 }
 
+/* ACT-04: grid en vez de flex fijo, para soportar de 1 a 6 anillos sin
+   overflow ni una tira horizontal forzada. auto-fit reparte el ancho
+   disponible entre los anillos que haya (2 quedan tan anchos como antes;
+   6 pasan solas a 2-3 filas en mobile), sin necesidad de media queries por
+   cantidad de actividades. */
 .dashboard-hero-anillos {
-  display: flex;
-  justify-content: center;
-  gap: 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  justify-items: center;
+  gap: 16px 8px;
 }
 
 .anillo-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  max-width: 110px;
 }
 
 .anillo-svg-wrap {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 76px;
+  height: 76px;
 }
 
 .anillo-svg {
@@ -1590,13 +1612,9 @@ body {
   stroke-linecap: round;
 }
 
-.anillo-progreso.anillo-gimnasio {
-  stroke: var(--color-primario);
-}
-
-.anillo-progreso.anillo-futbol {
-  stroke: var(--color-celeste);
-}
+/* El color de cada anillo (ACT-04) se aplica inline vía item.color desde el
+   catálogo (ver renderAnillo en dashboard.js), no con una clase por
+   deporte: agregar una actividad nueva no requiere agregar CSS acá. */
 
 .anillo-valor {
   position: absolute;
@@ -1604,22 +1622,23 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   font-family: var(--fuente-titulos);
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--color-texto);
   white-space: nowrap;
 }
 
 .anillo-valor-meta {
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   font-weight: 500;
   color: var(--color-texto-secundario);
 }
 
 .anillo-etiqueta {
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--color-texto-secundario);
+  text-align: center;
 }
 
 @media (min-width: 720px) {
@@ -1628,7 +1647,8 @@ body {
   }
 
   .dashboard-hero-anillos {
-    gap: 48px;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 24px 16px;
   }
 
   .anillo-svg-wrap {

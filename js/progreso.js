@@ -88,7 +88,7 @@ GYMAPP.progreso = (function () {
       renderSeccionEvolucion(opcionesDias, opcionesEjercicio) +
       "</div>" +
       '<div class="progreso-columna-lateral">' +
-      renderSeccionCalendario(sesiones) +
+      renderSeccionCalendario(data) +
       renderSeccionHistorialAccesible(sesiones) +
       "</div>" +
       "</div>" +
@@ -239,8 +239,8 @@ GYMAPP.progreso = (function () {
 
   /* --- Calendario (sección) --- */
 
-  function renderSeccionCalendario(sesiones) {
-    return '<div class="progreso-panel"><h3>Calendario</h3>' + renderCalendario(sesiones) + "</div>";
+  function renderSeccionCalendario(data) {
+    return '<div class="progreso-panel"><h3>Calendario</h3>' + renderCalendario(data) + "</div>";
   }
 
   /* --- Historial accesible ---
@@ -267,9 +267,14 @@ GYMAPP.progreso = (function () {
     );
   }
 
+  /* ACT-04: usa el catálogo dinámico (icono + nombre real de sesion.tipo) en
+     vez de asumir gimnasio/fútbol. Un tipo histórico que ya no está en el
+     catálogo (dato viejo/corrupto) cae en un fallback legible en vez de
+     romper el render. */
   function renderItemHistorialCompacto(sesion) {
     var fechaLegible = formatearFechaLegible(new Date(GYMAPP.util.fechaLocalISO(sesion.fecha) + "T00:00:00"));
-    var resumen = sesion.tipo === "gimnasio" ? "🏋️ Gimnasio" : "⚽ Fútbol";
+    var actividad = GYMAPP.actividades.obtenerActividadPorId(sesion.tipo);
+    var resumen = actividad ? actividad.icono + " " + actividad.nombre : "🏃 " + GYMAPP.util.escapeHtml(sesion.tipo || "Actividad");
 
     return (
       '<div class="progreso-historial-item">' +
@@ -308,10 +313,21 @@ GYMAPP.progreso = (function () {
     return celdas;
   }
 
-  function renderCalendario(sesiones) {
-    var mapaDias = construirMapaDias(sesiones);
+  /* ACT-04: reemplaza el modelo cerrado gimnasio/fútbol/ambos por un mapa
+     genérico de N actividades por día (compartido con dashboard.js, ver
+     GYMAPP.actividades.obtenerActividadesPorDia). Cada celda muestra un
+     badge de color por actividad realizada ese día (nunca uno por sesión:
+     el mapa ya dedupe por tipo). La leyenda es dinámica: actividades
+     actualmente configuradas + cualquier tipo que aparezca en el historial
+     mostrado, así que una actividad desactivada con partidos viejos sigue
+     apareciendo tanto en el calendario como en la leyenda. */
+  function renderCalendario(data) {
+    var sesiones = data.sesiones_entrenamiento;
+    var mapaDias = GYMAPP.actividades.obtenerActividadesPorDia(sesiones);
     var hoyIso = formatearFechaISO(new Date());
     var celdas = construirGrillaMes(estado.mesActual);
+    var actividadesUsuario = GYMAPP.actividades.obtenerActividadesUsuario(data.usuario);
+    var actividadesLeyenda = construirActividadesParaLeyenda(sesiones, actividadesUsuario);
 
     return (
       '<div class="calendario-header">' +
@@ -323,12 +339,7 @@ GYMAPP.progreso = (function () {
       DIAS_SEMANA.map(function (d) { return '<span class="calendario-dia-semana">' + d + "</span>"; }).join("") +
       celdas.map(function (fecha) { return renderCeldaCalendario(fecha, mapaDias, hoyIso); }).join("") +
       "</div>" +
-      '<div class="heatmap-leyenda">' +
-      leyendaItem("", "Sin entrenar") +
-      leyendaItem("gimnasio", "Gimnasio") +
-      leyendaItem("futbol", "Fútbol") +
-      leyendaItem("ambos", "Ambos") +
-      "</div>"
+      renderLeyendaCalendario(actividadesLeyenda)
     );
   }
 
@@ -336,48 +347,61 @@ GYMAPP.progreso = (function () {
     if (!fecha) return '<span class="calendario-dia vacio"></span>';
 
     var key = formatearFechaISO(fecha);
-    var estadoDia = mapaDias[key] || null;
-    var clase = estadoDia ? " " + estadoDia : "";
+    var tipos = mapaDias[key] || [];
+    var clase = tipos.length ? " con-actividad" : "";
     if (key === hoyIso) clase += " hoy";
 
-    var etiqueta = estadoDia ? etiquetaEstado(estadoDia) : "sin entrenamiento";
+    var etiqueta = tipos.length ? etiquetaEstado(tipos) : "sin entrenamiento";
     var titulo = formatearFechaLegible(fecha) + " · " + etiqueta;
 
     return (
       '<span class="calendario-dia' + clase + '" title="' + GYMAPP.util.escapeHtml(titulo) + '">' +
-      fecha.getDate() +
+      '<span class="calendario-dia-numero">' + fecha.getDate() + "</span>" +
+      GYMAPP.actividades.renderBadgesActividad(tipos) +
       "</span>"
     );
   }
 
-  function construirMapaDias(sesiones) {
-    var acumulado = {};
-    sesiones.forEach(function (s) {
-      var key = GYMAPP.util.fechaLocalISO(s.fecha);
-      if (!acumulado[key]) acumulado[key] = { gimnasio: false, futbol: false };
-      if (s.tipo === "gimnasio") acumulado[key].gimnasio = true;
-      if (s.tipo === "futbol") acumulado[key].futbol = true;
-    });
-    var resultado = {};
-    Object.keys(acumulado).forEach(function (key) {
-      var d = acumulado[key];
-      resultado[key] = d.gimnasio && d.futbol ? "ambos" : (d.gimnasio ? "gimnasio" : "futbol");
-    });
-    return resultado;
+  /* Actividades a listar en la leyenda: las configuradas actualmente, más
+     cualquier tipo que aparezca en las sesiones mostradas (para no ocultar
+     una actividad ya desactivada que tiene historial). Se devuelven en
+     orden de catálogo; un tipo que ya no exista en el catálogo no genera
+     entrada de leyenda (pero sigue viéndose como badge en el calendario). */
+  function construirActividadesParaLeyenda(sesiones, actividadesUsuario) {
+    var tipos = {};
+    actividadesUsuario.forEach(function (a) { tipos[a.tipo] = true; });
+    sesiones.forEach(function (s) { if (s && s.tipo) tipos[s.tipo] = true; });
+    return GYMAPP.actividades.obtenerCatalogo().filter(function (a) { return tipos[a.id]; });
   }
 
-  function leyendaItem(tipo, etiqueta) {
-    var clase = tipo ? " " + tipo : "";
+  function renderLeyendaCalendario(actividadesLeyenda) {
     return (
-      '<span class="heatmap-leyenda-item"><span class="heatmap-leyenda-swatch calendario-dia' + clase + '"></span>' +
+      '<div class="heatmap-leyenda">' +
+      leyendaItem(null, "Sin entrenar") +
+      actividadesLeyenda.map(function (a) { return leyendaItem(a, a.icono + " " + a.nombre); }).join("") +
+      "</div>"
+    );
+  }
+
+  function leyendaItem(actividad, etiqueta) {
+    var color = actividad ? actividad.color : "var(--color-borde)";
+    return (
+      '<span class="heatmap-leyenda-item"><span class="heatmap-leyenda-swatch" style="background-color:' + color + '"></span>' +
       etiqueta + "</span>"
     );
   }
 
-  function etiquetaEstado(tipo) {
-    if (tipo === "ambos") return "Gimnasio y fútbol";
-    if (tipo === "gimnasio") return "Gimnasio";
-    return "Fútbol";
+  /* Título legible del día para el tooltip (title=), generalizado a N
+     actividades: 1 sola devuelve su nombre, 2+ las concatena con comas y un
+     "y" final (ej. "Gimnasio, Pádel y Natación"), igual criterio que ya
+     usaba esta pantalla para "Gimnasio y fútbol". */
+  function etiquetaEstado(tipos) {
+    var nombres = tipos.map(function (t) {
+      var a = GYMAPP.actividades.obtenerActividadPorId(t);
+      return a ? a.nombre : t;
+    });
+    if (nombres.length === 1) return nombres[0];
+    return nombres.slice(0, -1).join(", ") + " y " + nombres[nombres.length - 1];
   }
 
   function formatearFechaISO(date) {
@@ -401,9 +425,7 @@ GYMAPP.progreso = (function () {
        de sesiones. */
 
   function obtenerDiasActivosOrdenados(sesiones) {
-    var diasActivos = {};
-    sesiones.forEach(function (s) { diasActivos[GYMAPP.util.fechaLocalISO(s.fecha)] = true; });
-    return Object.keys(diasActivos).sort();
+    return Object.keys(GYMAPP.actividades.obtenerActividadesPorDia(sesiones)).sort();
   }
 
   /* Recibe días activos ÚNICOS ya ordenados (ver obtenerDiasActivosOrdenados).
