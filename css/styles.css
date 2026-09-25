@@ -376,11 +376,18 @@ body {
 }
 
 /* Rutina */
+/* UI-02: el título y los dos botones de acción no entran en una sola fila a
+   320px (los botones no pueden achicarse más allá de su texto, que no
+   envuelve). flex-wrap deja que los botones bajen a su propia línea SOLO
+   cuando no entran (320-349px aprox.); a partir de ahí (375px en adelante,
+   donde ya entraban) el layout queda idéntico al de siempre, en una fila. */
 .rutina-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 10px;
   margin-bottom: 14px;
 }
 
