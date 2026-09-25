@@ -1,4 +1,8 @@
-/* Pestaña Entrenar: registra sesiones de gimnasio o fútbol contra sesiones_entrenamiento. */
+/* Pestaña Entrenar: registra sesiones contra sesiones_entrenamiento.
+   ACT-03: el selector de actividad y el formulario específico salen de
+   usuario.actividades + GYMAPP.actividades (catálogo), no de una lista fija
+   de gimnasio/fútbol. Gimnasio nunca cambió su lógica (rutina.dias +
+   ejercicios_realizados); el resto de los deportes usa sesion.detalle. */
 var GYMAPP = window.GYMAPP || (window.GYMAPP = {});
 
 GYMAPP.entrenamiento = (function () {
@@ -14,6 +18,9 @@ GYMAPP.entrenamiento = (function () {
          crear una nueva. Nunca se persiste tal cual: es solo el borrador. */
       editandoId: null,
       fecha: fechaHoyISO(),
+      /* Corregido en cada render() según usuario.actividades: si "gimnasio"
+         no está configurado, se reemplaza por la primera actividad
+         configurada (o queda así si el usuario no configuró ninguna). */
       tipo: "gimnasio",
       diaRutinaId: "",
       seriesPorEjercicio: {},
@@ -26,7 +33,12 @@ GYMAPP.entrenamiento = (function () {
       duracion_min: "",
       rpe: null,
       notas: "",
-      futbol: { tipo: "entrenamiento", posicion: "", minutos_jugados: "" }
+      /* ACT-03: campos específicos de deportes no-gimnasio, compartidos por
+         todos (fútbol/básquet/pádel/tenis/natación). Cada deporte solo lee y
+         guarda los campos que le corresponden según GYMAPP.actividades
+         (ver campos de cada actividad en el catálogo); tener acá los 5
+         campos siempre presentes evita tener un estado distinto por deporte. */
+      detalle: { tipo_sesion: "entrenamiento", posicion: "", minutos_jugados: "", distancia_m: "", estilo: "" }
     };
   }
 
@@ -38,6 +50,19 @@ GYMAPP.entrenamiento = (function () {
   function render(container) {
     if (!estado) estado = estadoInicial();
     var data = GYMAPP.storage.getData();
+    var actividadesUsuario = GYMAPP.actividades.obtenerActividadesUsuario(data.usuario);
+
+    /* Si no se está editando una sesión histórica, el tipo activo siempre
+       tiene que ser una actividad configurada: si el usuario desactivó la
+       que tenía elegida (o todavía no eligió ninguna), se corrige acá antes
+       de armar el formulario. Editando, en cambio, el tipo queda fijo al de
+       la sesión histórica aunque esa actividad ya no esté configurada. */
+    if (!estado.editandoId) {
+      var tiposConfigurados = actividadesUsuario.map(function (a) { return a.tipo; });
+      if (tiposConfigurados.indexOf(estado.tipo) === -1) {
+        estado.tipo = tiposConfigurados.length ? tiposConfigurados[0] : "gimnasio";
+      }
+    }
 
     /* Al editar, seriesPorEjercicio ya viene precargado desde la sesión
        histórica (ver cargarParaEditar); no hay que completarlo con la
@@ -47,7 +72,7 @@ GYMAPP.entrenamiento = (function () {
       if (dia) asegurarSeriesInicializadas(dia);
     }
 
-    container.innerHTML = template(data, estado);
+    container.innerHTML = template(data, estado, actividadesUsuario);
     if (!container.dataset.entrenarBound) {
       bindEventos(container);
       container.dataset.entrenarBound = "1";
@@ -70,18 +95,22 @@ GYMAPP.entrenamiento = (function () {
 
   /* --- Templates --- */
 
-  function template(data, estado) {
+  function template(data, estado, actividadesUsuario) {
+    var hayFormulario = !!estado.editandoId || actividadesUsuario.length > 0;
+
     return (
       '<div class="pantalla pantalla-entrenar">' +
       "<h2>Entrenar</h2>" +
       renderFecha(estado) +
-      renderSelectorTipo(estado) +
+      renderSelectorActividad(estado, actividadesUsuario) +
       '<div id="entrenar-mensaje" class="mensaje oculto"></div>' +
-      (estado.tipo === "gimnasio" ? renderGimnasio(data, estado) : renderFutbol(estado)) +
-      renderComun(estado) +
-      '<button type="button" data-accion="guardar-sesion" class="btn btn-primario">' +
-      (estado.editandoId ? "Guardar cambios" : "Guardar sesión") +
-      "</button>" +
+      (hayFormulario
+        ? renderCuerpoActividad(data, estado) +
+          renderComun(estado) +
+          '<button type="button" data-accion="guardar-sesion" class="btn btn-primario">' +
+          (estado.editandoId ? "Guardar cambios" : "Guardar sesión") +
+          "</button>"
+        : "") +
       (estado.editandoId
         ? '<button type="button" data-accion="cancelar-edicion" class="btn btn-secundario">Cancelar edición</button>'
         : "") +
@@ -99,11 +128,46 @@ GYMAPP.entrenamiento = (function () {
     );
   }
 
-  function renderSelectorTipo(estado) {
+  /* ACT-03: reemplaza el selector fijo Gimnasio/Fútbol por uno construido
+     desde usuario.actividades (nunca de una lista hardcodeada acá), usando
+     el catálogo de GYMAPP.actividades para nombre e ícono.
+     - Editando una sesión histórica: el tipo queda fijo (no seleccionable),
+       aunque esa actividad ya no esté configurada actualmente.
+     - 0 actividades configuradas: se avisa y no se ofrece cargar una nueva.
+     - 1 sola actividad: se selecciona sola, sin mostrar un selector.
+     - 2 o más: selector de botones (igual que el gimnasio/fútbol de
+       siempre); con más de 2 pasa a una tira horizontal deslizable para no
+       generar overflow en pantallas angostas. */
+  function renderSelectorActividad(estado, actividadesUsuario) {
+    if (estado.editandoId) {
+      /* Gimnasio ya deja clarísimo qué es en su propia edición (día de
+         rutina + ejercicios): repetirlo acá sería redundante. Para el resto
+         de los deportes, que no tienen otra pista visual del tipo mientras
+         se edita, sí conviene mostrarlo. */
+      if (estado.tipo === "gimnasio") return "";
+      var actividadEditando = GYMAPP.actividades.obtenerActividadPorId(estado.tipo);
+      var etiquetaEditando = actividadEditando ? actividadEditando.icono + " " + actividadEditando.nombre : estado.tipo;
+      return '<div class="campo"><label>Actividad</label><p class="nota">' + etiquetaEditando + "</p></div>";
+    }
+
+    if (!actividadesUsuario.length) {
+      return '<p class="nota">Todavía no configuraste ninguna actividad. Andá a Rutina para elegir tus actividades y metas semanales.</p>';
+    }
+
+    if (actividadesUsuario.length === 1) {
+      var unica = GYMAPP.actividades.obtenerActividadPorId(actividadesUsuario[0].tipo);
+      var etiquetaUnica = unica ? unica.icono + " " + unica.nombre : actividadesUsuario[0].tipo;
+      return '<div class="campo"><label>Actividad</label><p class="nota">' + etiquetaUnica + "</p></div>";
+    }
+
+    var claseExtra = actividadesUsuario.length > 2 ? " selector-tipo-entrenar" : "";
     return (
-      '<div class="selector-tipo">' +
-      botonTipo("gimnasio", "🏋️ Gimnasio", estado.tipo) +
-      botonTipo("futbol", "⚽ Fútbol", estado.tipo) +
+      '<div class="selector-tipo' + claseExtra + '">' +
+      actividadesUsuario.map(function (a) {
+        var actividad = GYMAPP.actividades.obtenerActividadPorId(a.tipo);
+        if (!actividad) return "";
+        return botonTipo(actividad.id, actividad.icono + " " + actividad.nombre, estado.tipo);
+      }).join("") +
       "</div>"
     );
   }
@@ -231,19 +295,75 @@ GYMAPP.entrenamiento = (function () {
     );
   }
 
-  function renderFutbol(estado) {
-    var f = estado.futbol;
+  /* ACT-03: qué formulario mostrar para el cuerpo específico de la
+     actividad elegida. Gimnasio y natación tienen forma propia real
+     (rutina/series el primero, distancia+estilo la segunda); el resto
+     (fútbol, básquet, pádel, tenis, y cualquier deporte nuevo con la misma
+     forma) comparte renderDeporteGenerico según su metadata de catálogo. */
+  function renderCuerpoActividad(data, estado) {
+    if (estado.tipo === "gimnasio") return renderGimnasio(data, estado);
+    if (estado.tipo === "natacion") return renderNatacion(estado);
+
+    var actividad = GYMAPP.actividades.obtenerActividadPorId(estado.tipo);
+    if (!actividad) return "";
+    return renderDeporteGenerico(estado, actividad);
+  }
+
+  /* Formulario genérico para deportes de tipoSesion (entrenamiento/partido)
+     + opcionalmente posición y minutos jugados (fútbol). Un deporte nuevo
+     que solo necesite tipoSesion + duración + RPE + notas (ya cubiertos por
+     renderComun) queda andando agregando una entrada al catálogo, sin
+     escribir un formulario nuevo acá. */
+  function renderDeporteGenerico(estado, actividad) {
+    var campos = actividad.campos || [];
+    var d = estado.detalle;
+    var html = "";
+
+    if (campos.indexOf("tipoSesion") !== -1) {
+      html += '<div class="campo"><label for="select-detalle-tipo-sesion">Tipo de sesión</label>' +
+        '<select id="select-detalle-tipo-sesion">' +
+        '<option value="entrenamiento"' + (d.tipo_sesion === "entrenamiento" ? " selected" : "") + ">Entrenamiento</option>" +
+        '<option value="partido"' + (d.tipo_sesion === "partido" ? " selected" : "") + ">Partido</option>" +
+        "</select></div>";
+    }
+
+    if (campos.indexOf("posicion") !== -1) {
+      html += '<div class="campo"><label for="input-detalle-posicion">Posición</label>' +
+        '<input type="text" id="input-detalle-posicion" placeholder="Ej: Mediocampista" value="' + GYMAPP.util.escapeHtml(d.posicion) + '" /></div>';
+    }
+
+    if (campos.indexOf("minutosJugados") !== -1) {
+      html += '<div class="campo"><label for="input-detalle-minutos">Minutos jugados</label>' +
+        '<input type="number" id="input-detalle-minutos" inputmode="numeric" min="0" placeholder="Minutos" value="' + GYMAPP.util.escapeHtml(d.minutos_jugados) + '" /></div>';
+    }
+
+    return '<div class="deporte-form">' + html + "</div>";
+  }
+
+  var OPCIONES_ESTILO_NATACION = [
+    ["", "Sin especificar"],
+    ["libre", "Libre"],
+    ["espalda", "Espalda"],
+    ["pecho", "Pecho"],
+    ["mariposa", "Mariposa"],
+    ["combinado", "Combinado"]
+  ];
+
+  /* Natación tiene forma propia (distancia en metros + estilo opcional, sin
+     tipoSesion): no encaja en renderDeporteGenerico, así que tiene su propio
+     render como gimnasio. */
+  function renderNatacion(estado) {
+    var d = estado.detalle;
     return (
-      '<div class="futbol-form">' +
-      '<div class="campo"><label for="select-futbol-tipo">Tipo</label>' +
-      '<select id="select-futbol-tipo">' +
-      '<option value="entrenamiento"' + (f.tipo === "entrenamiento" ? " selected" : "") + ">Entrenamiento</option>" +
-      '<option value="partido"' + (f.tipo === "partido" ? " selected" : "") + ">Partido</option>" +
+      '<div class="deporte-form">' +
+      '<div class="campo"><label for="input-detalle-distancia">Distancia (metros)</label>' +
+      '<input type="number" id="input-detalle-distancia" inputmode="decimal" min="0" step="0.01" placeholder="Metros" value="' + GYMAPP.util.escapeHtml(d.distancia_m) + '" /></div>' +
+      '<div class="campo"><label for="select-detalle-estilo">Estilo (opcional)</label>' +
+      '<select id="select-detalle-estilo">' +
+      OPCIONES_ESTILO_NATACION.map(function (o) {
+        return '<option value="' + o[0] + '"' + (d.estilo === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
+      }).join("") +
       "</select></div>" +
-      '<div class="campo"><label for="input-futbol-posicion">Posición</label>' +
-      '<input type="text" id="input-futbol-posicion" placeholder="Ej: Mediocampista" value="' + GYMAPP.util.escapeHtml(f.posicion) + '" /></div>' +
-      '<div class="campo"><label for="input-futbol-minutos">Minutos jugados</label>' +
-      '<input type="number" id="input-futbol-minutos" inputmode="numeric" min="0" placeholder="Minutos" value="' + GYMAPP.util.escapeHtml(f.minutos_jugados) + '" /></div>' +
       "</div>"
     );
   }
@@ -299,9 +419,7 @@ GYMAPP.entrenamiento = (function () {
       resumen = "🏋️ " + (dia ? GYMAPP.util.escapeHtml(dia.nombre) : "Día ya no existe en la rutina") +
         " · " + cantidad + (cantidad === 1 ? " ejercicio" : " ejercicios");
     } else {
-      var fd = sesion.futbol_detalle || {};
-      resumen = "⚽ " + (fd.tipo === "partido" ? "Partido" : "Entrenamiento") +
-        (fd.minutos_jugados ? " · " + fd.minutos_jugados + " min" : "");
+      resumen = resumenSesionNoGimnasio(sesion);
     }
 
     return (
@@ -316,6 +434,25 @@ GYMAPP.entrenamiento = (function () {
       "</div>" +
       "</div>"
     );
+  }
+
+  /* Resumen genérico del historial para cualquier deporte que no sea
+     gimnasio (incluye actividades ya desactivadas: usa el catálogo y
+     obtenerDetalleSesion, que no dependen de usuario.actividades). Solo
+     fútbol y natación agregan un dato propio (minutos / distancia); el
+     resto queda con ícono + nombre + tipo de sesión. */
+  function resumenSesionNoGimnasio(sesion) {
+    var actividad = GYMAPP.actividades.obtenerActividadPorId(sesion.tipo);
+    var detalle = GYMAPP.actividades.obtenerDetalleSesion(sesion) || {};
+    var icono = actividad ? actividad.icono : "🏃";
+    var nombre = actividad ? actividad.nombre : sesion.tipo;
+    var tipoSesion = detalle.tipo_sesion || detalle.tipo || null;
+
+    var partes = [icono + " " + nombre];
+    if (tipoSesion) partes.push(tipoSesion === "partido" ? "Partido" : "Entrenamiento");
+    if (sesion.tipo === "futbol" && detalle.minutos_jugados) partes.push(detalle.minutos_jugados + " min");
+    if (sesion.tipo === "natacion" && detalle.distancia_m) partes.push(detalle.distancia_m + " m");
+    return partes.join(" · ");
   }
 
   /* Carga una sesión existente en el borrador para editarla. Reconstruye
@@ -344,6 +481,12 @@ GYMAPP.entrenamiento = (function () {
       });
     }
 
+    /* obtenerDetalleSesion da compatibilidad hacia atrás: para fútbol
+       histórico sin migrar lee futbol_detalle (campo "tipo"), para todo lo
+       demás lee detalle (campo "tipo_sesion"). Cubrimos ambas claves acá
+       para no perder el valor sea cual sea el origen. */
+    var detalleGuardado = GYMAPP.actividades.obtenerDetalleSesion(sesion) || {};
+
     estado = {
       editandoId: sesion.id,
       fecha: GYMAPP.util.fechaLocalISO(sesion.fecha),
@@ -355,13 +498,13 @@ GYMAPP.entrenamiento = (function () {
       duracion_min: sesion.duracion_min != null ? String(sesion.duracion_min) : "",
       rpe: sesion.rpe || null,
       notas: sesion.notas || "",
-      futbol: sesion.futbol_detalle
-        ? {
-            tipo: sesion.futbol_detalle.tipo || "entrenamiento",
-            posicion: sesion.futbol_detalle.posicion || "",
-            minutos_jugados: sesion.futbol_detalle.minutos_jugados != null ? String(sesion.futbol_detalle.minutos_jugados) : ""
-          }
-        : estadoInicial().futbol
+      detalle: {
+        tipo_sesion: detalleGuardado.tipo_sesion || detalleGuardado.tipo || "entrenamiento",
+        posicion: detalleGuardado.posicion || "",
+        minutos_jugados: detalleGuardado.minutos_jugados != null ? String(detalleGuardado.minutos_jugados) : "",
+        distancia_m: detalleGuardado.distancia_m != null ? String(detalleGuardado.distancia_m) : "",
+        estilo: detalleGuardado.estilo || ""
+      }
     };
   }
 
@@ -380,7 +523,8 @@ GYMAPP.entrenamiento = (function () {
     var sesion = data.sesiones_entrenamiento.filter(function (s) { return s.id === sesionId; })[0];
     if (!sesion) return;
 
-    var etiquetaTipo = sesion.tipo === "gimnasio" ? "de gimnasio" : "de fútbol";
+    var actividadSesion = GYMAPP.actividades.obtenerActividadPorId(sesion.tipo);
+    var etiquetaTipo = "de " + (actividadSesion ? actividadSesion.nombre.toLowerCase() : sesion.tipo);
     var fechaLegible = formatearFechaHistorial(GYMAPP.util.fechaLocalISO(sesion.fecha));
     if (!confirm("¿Eliminar esta sesión " + etiquetaTipo + " del " + fechaLegible + "? Esta acción no se puede deshacer.")) return;
 
@@ -455,8 +599,10 @@ GYMAPP.entrenamiento = (function () {
       if (ev.target.id === "select-dia-rutina") {
         estado.diaRutinaId = ev.target.value;
         render(container);
-      } else if (ev.target.id === "select-futbol-tipo") {
-        estado.futbol.tipo = ev.target.value;
+      } else if (ev.target.id === "select-detalle-tipo-sesion") {
+        estado.detalle.tipo_sesion = ev.target.value;
+      } else if (ev.target.id === "select-detalle-estilo") {
+        estado.detalle.estilo = ev.target.value;
       } else if (ev.target.id === "input-fecha-sesion") {
         estado.fecha = ev.target.value;
       }
@@ -468,10 +614,12 @@ GYMAPP.entrenamiento = (function () {
         estado.duracion_min = target.value;
       } else if (target.id === "input-notas") {
         estado.notas = target.value;
-      } else if (target.id === "input-futbol-posicion") {
-        estado.futbol.posicion = target.value;
-      } else if (target.id === "input-futbol-minutos") {
-        estado.futbol.minutos_jugados = target.value;
+      } else if (target.id === "input-detalle-posicion") {
+        estado.detalle.posicion = target.value;
+      } else if (target.id === "input-detalle-minutos") {
+        estado.detalle.minutos_jugados = target.value;
+      } else if (target.id === "input-detalle-distancia") {
+        estado.detalle.distancia_m = target.value;
       } else if (target.dataset.campo === "peso_kg" || target.dataset.campo === "reps") {
         var fila = target.closest("[data-serie-indice]");
         var ejercicioId = fila.dataset.ejercicioId;
@@ -555,10 +703,21 @@ GYMAPP.entrenamiento = (function () {
     var esEdicion = !!estado.editandoId;
     var data = GYMAPP.storage.getData();
     var sesionOriginal = null;
+
     if (esEdicion) {
       sesionOriginal = data.sesiones_entrenamiento.filter(function (s) { return s.id === estado.editandoId; })[0] || null;
       if (!sesionOriginal) {
         mostrarMensaje(container, "Esta sesión ya no existe (puede haber sido eliminada). Cancelá la edición e intentá de nuevo.", "error");
+        return;
+      }
+    } else {
+      /* No se puede iniciar una sesión nueva de una actividad que ya no está
+         configurada (el selector ya no la ofrece, esto es un resguardo por
+         si el estado quedó desactualizado, ej. la desactivó en otra pestaña). */
+      var actividadesUsuario = GYMAPP.actividades.obtenerActividadesUsuario(data.usuario);
+      var estaConfigurada = actividadesUsuario.some(function (a) { return a.tipo === estado.tipo; });
+      if (!estaConfigurada) {
+        mostrarMensaje(container, "Esa actividad ya no está configurada. Elegí una actividad configurada en Rutina antes de guardar.", "error");
         return;
       }
     }
@@ -605,13 +764,46 @@ GYMAPP.entrenamiento = (function () {
         return;
       }
       sesion.ejercicios_realizados = ejerciciosRealizados;
+    } else if (estado.tipo === "natacion") {
+      var distanciaValor = null;
+      if (estado.detalle.distancia_m !== "") {
+        var distanciaNum = parseFloat(estado.detalle.distancia_m);
+        if (isNaN(distanciaNum) || distanciaNum <= 0) {
+          mostrarMensaje(container, "La distancia debe ser un número mayor a 0, o dejala vacía.", "error");
+          return;
+        }
+        distanciaValor = distanciaNum;
+      }
+      sesion.detalle = { distancia_m: distanciaValor, estilo: estado.detalle.estilo || "" };
     } else {
-      var minutos = parseInt(estado.futbol.minutos_jugados, 10) || 0;
-      sesion.futbol_detalle = {
-        tipo: estado.futbol.tipo,
-        posicion: estado.futbol.posicion,
-        minutos_jugados: minutos
-      };
+      /* Fútbol/básquet/pádel/tenis (y cualquier deporte nuevo con la misma
+         forma): arma detalle solo con los campos que le corresponden según
+         el catálogo, nunca con los 5 campos de estado.detalle completos. */
+      var actividad = GYMAPP.actividades.obtenerActividadPorId(estado.tipo);
+      var campos = (actividad && actividad.campos) || [];
+      var detalleNuevo = {};
+      if (campos.indexOf("tipoSesion") !== -1) detalleNuevo.tipo_sesion = estado.detalle.tipo_sesion || "entrenamiento";
+      if (campos.indexOf("posicion") !== -1) detalleNuevo.posicion = estado.detalle.posicion || "";
+      if (campos.indexOf("minutosJugados") !== -1) detalleNuevo.minutos_jugados = parseInt(estado.detalle.minutos_jugados, 10) || 0;
+
+      if (estado.tipo === "futbol" && esEdicion && sesionOriginal.futbol_detalle && !sesionOriginal.detalle) {
+        /* Sesión histórica de fútbol que todavía guarda el detalle en
+           futbol_detalle (ACT-01, antes de que existiera sesion.detalle):
+           la opción de menor riesgo es seguir actualizando ese mismo campo
+           en vez de migrarla a "detalle" recién en esta edición puntual.
+           Así ningún consumidor existente de futbol_detalle (incluida esta
+           misma pantalla, vía obtenerDetalleSesion) puede quedar con datos
+           inconsistentes, y no hay que demostrar que ningún otro lugar de
+           la app asuma ese campo. Las sesiones NUEVAS de fútbol, en cambio,
+           siempre usan "detalle" (nunca crean futbol_detalle nuevo). */
+        sesion.futbol_detalle = {
+          tipo: detalleNuevo.tipo_sesion,
+          posicion: detalleNuevo.posicion,
+          minutos_jugados: detalleNuevo.minutos_jugados
+        };
+      } else {
+        sesion.detalle = detalleNuevo;
+      }
     }
 
     var resultado = GYMAPP.storage.updateData(function (d) {

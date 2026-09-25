@@ -654,8 +654,30 @@ body {
   opacity: 0.6;
 }
 
-.futbol-form {
+.deporte-form {
   margin-bottom: 4px;
+}
+
+/* ACT-03: con 3+ actividades configuradas, el selector de Entrenar pasa de
+   ancho-igual-repartido a una tira horizontal deslizable, para no generar
+   overflow de página en pantallas angostas (320-375px) con nombres largos
+   como "Natación" o "Básquet". Con 1-2 actividades el selector sigue
+   exactamente igual que siempre (.selector-tipo sin esta clase). */
+.selector-tipo-entrenar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.selector-tipo-entrenar::-webkit-scrollbar {
+  display: none;
+}
+
+.selector-tipo-entrenar .btn-tipo {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .rpe-selector {

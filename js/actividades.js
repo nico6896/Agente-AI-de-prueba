@@ -1,11 +1,13 @@
-/* Catálogo de actividades y helpers compartidos (ACT-01).
+/* Catálogo de actividades y helpers compartidos (ACT-01/ACT-02/ACT-03).
 
    Base técnica para que cada usuario elija qué deportes practica y su meta
-   semanal por deporte, sin estar limitado a Gimnasio + Fútbol. Este módulo
-   SOLO expone el catálogo y funciones de consulta: todavía no lo usa
-   ninguna pantalla (onboarding, Entrenar, Dashboard, Progreso siguen
-   exactamente como están). Agregar un deporte nuevo en el futuro es agregar
-   una entrada al catálogo de acá, sin tocar el resto de la app.
+   semanal por deporte, sin estar limitado a Gimnasio + Fútbol. Onboarding y
+   Rutina (ACT-02) ya lo usan para elegir actividades y metas; Entrenar
+   (ACT-03) lo usa para el selector dinámico y el formulario de carga de
+   sesión de cada deporte. Agregar un deporte nuevo en el futuro es agregar
+   una entrada al catálogo de acá: si solo necesita tipoSesion + duración +
+   RPE + notas, Entrenar ya sabe renderizarlo sin código nuevo (ver
+   renderDeporteGenerico en entrenamiento.js).
 
    Es completamente independiente de storage.js: no lee ni escribe
    localStorage, solo opera sobre los objetos (usuario/sesión) que le pasan. */
@@ -18,20 +20,22 @@ GYMAPP.actividades = (function () {
 
   /* Catálogo estático. Cada entrada:
      - id: estable, es el mismo valor que usa/usará sesion.tipo.
-     - nombre, icono: para mostrar en cualquier pantalla futura.
+     - nombre, icono: para mostrar en cualquier pantalla.
      - modoRutina: true únicamente para gimnasio, que sigue su sistema actual
        (rutina.dias + ejercicios_realizados), no sesion.detalle.
-     - campos: metadata de qué campos arma el formulario de sesion.detalle
-       para ese deporte (todavía no se usa: es la base para un formulario
-       genérico futuro en Entrenar, sin necesidad de una función renderX
-       nueva por cada deporte con la misma forma de campos). */
+     - campos: qué campos ESPECÍFICOS de este deporte arma Entrenar dentro de
+       sesion.detalle (ACT-03). Fecha, duración, RPE y notas son generales a
+       todos los deportes y nunca van acá (se guardan siempre en la sesión,
+       no en detalle). Valores posibles: "tipoSesion" (entrenamiento/
+       partido), "posicion", "minutosJugados" (fútbol), "distancia"/"estilo"
+       (natación, con su propio formulario por ser distinto al resto). */
   var CATALOGO = {
     gimnasio: { id: "gimnasio", nombre: "Gimnasio", icono: "🏋️", modoRutina: true, campos: [] },
-    futbol: { id: "futbol", nombre: "Fútbol", icono: "⚽", modoRutina: false, campos: ["tipoSesion", "duracion", "rpe", "notas"] },
-    basquet: { id: "basquet", nombre: "Básquet", icono: "🏀", modoRutina: false, campos: ["tipoSesion", "duracion", "rpe", "notas"] },
-    natacion: { id: "natacion", nombre: "Natación", icono: "🏊", modoRutina: false, campos: ["duracion", "distancia", "estilo", "rpe"] },
-    padel: { id: "padel", nombre: "Pádel", icono: "🎾", modoRutina: false, campos: ["tipoSesion", "duracion", "rpe", "notas"] },
-    tenis: { id: "tenis", nombre: "Tenis", icono: "🎾", modoRutina: false, campos: ["tipoSesion", "duracion", "rpe", "notas"] }
+    futbol: { id: "futbol", nombre: "Fútbol", icono: "⚽", modoRutina: false, campos: ["tipoSesion", "posicion", "minutosJugados"] },
+    basquet: { id: "basquet", nombre: "Básquet", icono: "🏀", modoRutina: false, campos: ["tipoSesion"] },
+    natacion: { id: "natacion", nombre: "Natación", icono: "🏊", modoRutina: false, campos: ["distancia", "estilo"] },
+    padel: { id: "padel", nombre: "Pádel", icono: "🎾", modoRutina: false, campos: ["tipoSesion"] },
+    tenis: { id: "tenis", nombre: "Tenis", icono: "🎾", modoRutina: false, campos: ["tipoSesion"] }
   };
 
   /* Catálogo completo, en el orden sugerido. */
