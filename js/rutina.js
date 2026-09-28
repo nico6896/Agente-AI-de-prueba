@@ -35,6 +35,7 @@ GYMAPP.rutina = (function () {
       "</datalist>" +
       renderSeccionActividades(usuario) +
       (GYMAPP.auth ? GYMAPP.auth.renderSeccionCuenta() : "") +
+      (GYMAPP.sync ? GYMAPP.sync.renderSeccionSincronizacion() : "") +
       renderSeccionBackup() +
       "</div>"
     );
@@ -157,6 +158,10 @@ GYMAPP.rutina = (function () {
       GYMAPP.auth.suscribirCambiosSesion(function () {
         if (container.querySelector(".pantalla-rutina")) render(container);
       });
+    }
+
+    if (GYMAPP.sync) {
+      GYMAPP.sync.bindEventosSincronizacion(container);
     }
   }
 

@@ -552,6 +552,11 @@ GYMAPP.auth = (function () {
 
   return {
     inicializar: inicializar,
+    /* Expuesto para SYNC-01 (js/sync.js): reutiliza el mismo cliente/sesión
+       de Supabase que ya administra este módulo (auth.js sigue siendo el
+       único dueño de su ciclo de vida), en vez de que sync.js cree un
+       cliente propio y duplique el manejo de sesión. */
+    obtenerCliente: obtenerCliente,
     obtenerSesion: obtenerSesion,
     suscribirCambiosSesion: suscribirCambiosSesion,
     crearCuenta: crearCuenta,

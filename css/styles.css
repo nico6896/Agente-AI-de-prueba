@@ -1402,6 +1402,23 @@ body {
   color: var(--color-celeste);
 }
 
+/* Sincronización (SYNC-01) */
+.seccion-sincronizacion {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-borde);
+}
+
+.seccion-sincronizacion h3 {
+  margin: 0 0 6px;
+  font-size: 0.98rem;
+  color: var(--color-texto-secundario);
+}
+
+.seccion-sincronizacion .btn-ancho {
+  margin-top: 9px;
+}
+
 /* Backup */
 .seccion-backup {
   margin-top: 24px;
