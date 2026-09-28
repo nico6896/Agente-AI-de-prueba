@@ -31,8 +31,17 @@ GYMAPP.auth = (function () {
   var listeners = [];
 
   /* Estado efímero de la UI de login (no se persiste en ningún lado, y
-     nunca incluye la contraseña). modo: "iniciar-sesion" | "crear-cuenta". */
+     nunca incluye la contraseña). modo: "iniciar-sesion" | "crear-cuenta" |
+     "recuperar-password". */
   var estadoCuenta = { modo: "iniciar-sesion", email: "", cargando: false };
+
+  /* AUTH-03: true exclusivamente mientras la sesión activa proviene de un
+     enlace de recuperación de contraseña (evento PASSWORD_RECOVERY). Mientras
+     esté en true, renderSeccionCuenta() muestra únicamente el formulario de
+     nueva contraseña, nunca el login normal ni la vista de "Conectado como".
+     Nunca se persiste: es puramente en memoria, igual que estadoCuenta. */
+  var enRecuperacion = false;
+  var estadoNuevaPassword = { cargando: false };
 
   function configurado() {
     return (
@@ -55,14 +64,31 @@ GYMAPP.auth = (function () {
           storageKey: STORAGE_KEY_AUTH,
           persistSession: true,
           autoRefreshToken: true,
-          /* No hay ningún flujo basado en enlaces de email (ni magic link
-             ni OTP): el login es por email + contraseña, así que no hace
-             falta que el cliente inspeccione la URL de retorno. */
-          detectSessionInUrl: false
+          /* El login normal sigue siendo exclusivamente por email +
+             contraseña (signUp / signInWithPassword): esto NO agrega magic
+             link ni OTP como forma de iniciar sesión. detectSessionInUrl
+             tiene que estar en true igual, porque es el mecanismo genérico
+             con el que el SDK de Supabase procesa CUALQUIER enlace de
+             redirección que la propia app haya generado, y AUTH-03 agrega
+             uno: el enlace de recuperación de contraseña (generado acá mismo
+             por resetPasswordForEmail). Con este valor en false, al volver
+             de ese enlace el SDK nunca leía los parámetros de la URL, nunca
+             armaba la sesión de recuperación y por eso el evento
+             PASSWORD_RECOVERY jamás se disparaba. Ningún otro flujo del
+             login normal queda afectado: ninguna otra función de este
+             módulo pone tokens de sesión en la URL. */
+          detectSessionInUrl: true
         }
       });
       cliente.auth.onAuthStateChange(function (_evento, sesion) {
         sesionActual = sesion;
+        if (_evento === "PASSWORD_RECOVERY") {
+          /* La sesión que llega acá es real y válida (Supabase la crea a
+             partir del enlace de recuperación), pero mientras estemos en
+             este estado no se debe mostrar el login normal ni "Conectado
+             como...": solo el formulario de nueva contraseña. */
+          enRecuperacion = true;
+        }
         notificarCambio();
       });
     } catch (e) {
@@ -133,6 +159,30 @@ GYMAPP.auth = (function () {
     return c.auth.signOut();
   }
 
+  /* URL pública de la app (GitHub Pages), a la que Supabase redirige después
+     de que el usuario hace click en el enlace de recuperación del mail. Tiene
+     que estar dada de alta en Supabase (Authentication -> URL Configuration
+     -> Redirect URLs); nunca puede ser localhost. */
+  var URL_REDIRECT_RECUPERACION = "https://nico6896.github.io/Agente-AI-de-prueba/";
+
+  /* Pide el mail de recuperación. No revela si el email existe o no más allá
+     de lo que Supabase mismo devuelva: siempre se trata como éxito salvo un
+     error explícito de la API (por ejemplo, problema de red). */
+  function solicitarRecuperacionPassword(email) {
+    var c = obtenerCliente();
+    if (!c) return Promise.reject(new Error("Supabase no está configurado."));
+    return c.auth.resetPasswordForEmail(email, { redirectTo: URL_REDIRECT_RECUPERACION });
+  }
+
+  /* Actualiza la contraseña de la sesión de recuperación activa. La nueva
+     contraseña vive solo en el input y en este parámetro de la request: no
+     se guarda ni se loguea en ningún lado. */
+  function actualizarPassword(nuevaPassword) {
+    var c = obtenerCliente();
+    if (!c) return Promise.reject(new Error("Supabase no está configurado."));
+    return c.auth.updateUser({ password: nuevaPassword });
+  }
+
   /* --- UI: sección discreta de cuenta, embebida en la pantalla de Rutina --- */
 
   var REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -146,6 +196,10 @@ GYMAPP.auth = (function () {
         "</div>"
       );
     }
+
+    /* Prioridad máxima: mientras estemos en recuperación de contraseña no se
+       muestra ni el login normal ni "Conectado como...", solo este formulario. */
+    if (enRecuperacion) return renderSeccionNuevaPassword();
 
     var email = sesionActual && sesionActual.user ? sesionActual.user.email : null;
     if (email) return renderSeccionConectado(email);
@@ -164,6 +218,8 @@ GYMAPP.auth = (function () {
   }
 
   function renderSeccionFormulario() {
+    if (estadoCuenta.modo === "recuperar-password") return renderSeccionRecuperarPassword();
+
     var esCrearCuenta = estadoCuenta.modo === "crear-cuenta";
     return (
       '<div class="seccion-cuenta">' +
@@ -201,6 +257,49 @@ GYMAPP.auth = (function () {
       '" class="btn btn-primario btn-ancho">' +
       (esCrearCuenta ? "Crear cuenta" : "Iniciar sesión") +
       "</button>" +
+      (!esCrearCuenta
+        ? '<button type="button" data-accion="modo-recuperar-password" class="btn-enlace">¿Olvidaste tu contraseña?</button>'
+        : "") +
+      "</div>"
+    );
+  }
+
+  function renderSeccionRecuperarPassword() {
+    return (
+      '<div class="seccion-cuenta">' +
+      "<h3>Cuenta</h3>" +
+      '<div id="cuenta-mensaje" class="mensaje oculto"></div>' +
+      '<p class="nota">Ingresá tu email y te enviamos un enlace para recuperar tu contraseña.</p>' +
+      '<div class="campo">' +
+      '<label for="input-email-cuenta">Email</label>' +
+      '<input type="email" id="input-email-cuenta" placeholder="tu@email.com" value="' +
+      GYMAPP.util.escapeHtml(estadoCuenta.email) +
+      '" autocomplete="email" />' +
+      "</div>" +
+      '<button type="button" data-accion="enviar-recuperacion" class="btn btn-primario btn-ancho">Enviar enlace de recuperación</button>' +
+      '<button type="button" data-accion="modo-iniciar-sesion" class="btn-enlace">Volver a iniciar sesión</button>' +
+      "</div>"
+    );
+  }
+
+  function renderSeccionNuevaPassword() {
+    return (
+      '<div class="seccion-cuenta">' +
+      "<h3>Cuenta</h3>" +
+      '<div id="cuenta-mensaje" class="mensaje oculto"></div>' +
+      '<p class="nota">Ingresá tu nueva contraseña.</p>' +
+      '<div class="campo">' +
+      '<label for="input-nueva-password">Nueva contraseña</label>' +
+      '<input type="password" id="input-nueva-password" placeholder="••••••••" autocomplete="new-password" />' +
+      "</div>" +
+      '<div class="campo">' +
+      '<label for="input-repetir-password">Repetir contraseña</label>' +
+      '<input type="password" id="input-repetir-password" placeholder="••••••••" autocomplete="new-password" />' +
+      "</div>" +
+      '<button type="button" data-accion="actualizar-password" class="btn btn-primario btn-ancho"' +
+      (estadoNuevaPassword.cargando ? " disabled" : "") + ">" +
+      (estadoNuevaPassword.cargando ? "Guardando..." : "Cambiar contraseña") +
+      "</button>" +
       "</div>"
     );
   }
@@ -222,6 +321,8 @@ GYMAPP.auth = (function () {
     container.addEventListener("click", function (ev) {
       var boton = ev.target.closest(
         '[data-accion="modo-iniciar-sesion"], [data-accion="modo-crear-cuenta"], ' +
+        '[data-accion="modo-recuperar-password"], [data-accion="enviar-recuperacion"], ' +
+        '[data-accion="actualizar-password"], ' +
         '[data-accion="iniciar-sesion"], [data-accion="crear-cuenta"], ' +
         '[data-accion="cerrar-sesion-cuenta"]'
       );
@@ -234,6 +335,13 @@ GYMAPP.auth = (function () {
       } else if (accion === "modo-crear-cuenta") {
         estadoCuenta.modo = "crear-cuenta";
         if (alCambiarEstado) alCambiarEstado();
+      } else if (accion === "modo-recuperar-password") {
+        estadoCuenta.modo = "recuperar-password";
+        if (alCambiarEstado) alCambiarEstado();
+      } else if (accion === "enviar-recuperacion") {
+        manejarSolicitarRecuperacion(container, boton);
+      } else if (accion === "actualizar-password") {
+        manejarActualizarPassword(container, boton, alCambiarEstado);
       } else if (accion === "iniciar-sesion") {
         manejarIniciarSesion(container, boton);
       } else if (accion === "crear-cuenta") {
@@ -338,6 +446,92 @@ GYMAPP.auth = (function () {
         boton.disabled = false;
         console.error("Error de red al crear la cuenta", e);
         mostrarMensajeCuenta(container, "Ocurrió un error de red al crear la cuenta. Probá de nuevo.", "error");
+      });
+  }
+
+  function manejarSolicitarRecuperacion(container, boton) {
+    if (estadoCuenta.cargando) return;
+    var inputEmail = container.querySelector("#input-email-cuenta");
+    var email = inputEmail ? inputEmail.value.trim() : "";
+
+    if (!REGEX_EMAIL.test(email)) {
+      mostrarMensajeCuenta(container, "Ingresá un email válido.", "error");
+      return;
+    }
+
+    estadoCuenta.email = email;
+    estadoCuenta.cargando = true;
+    boton.disabled = true;
+    mostrarMensajeCuenta(container, "Enviando...", "info");
+
+    solicitarRecuperacionPassword(email)
+      .then(function (resultado) {
+        estadoCuenta.cargando = false;
+        boton.disabled = false;
+        if (resultado && resultado.error) {
+          mostrarMensajeCuenta(container, "No se pudo enviar el enlace: " + resultado.error.message, "error");
+          return;
+        }
+        /* No se revela si el email existe o no más allá de lo que haya
+           devuelto Supabase: siempre se muestra el mismo mensaje de éxito. */
+        mostrarMensajeCuenta(container, "Te enviamos un enlace para recuperar tu contraseña.", "exito");
+      })
+      .catch(function (e) {
+        estadoCuenta.cargando = false;
+        boton.disabled = false;
+        console.error("Error de red al solicitar recuperación de contraseña", e);
+        mostrarMensajeCuenta(container, "Ocurrió un error de red. Probá de nuevo.", "error");
+      });
+  }
+
+  function manejarActualizarPassword(container, boton, alCambiarEstado) {
+    if (estadoNuevaPassword.cargando) return;
+    var inputNueva = container.querySelector("#input-nueva-password");
+    var inputRepetir = container.querySelector("#input-repetir-password");
+    var nuevaPassword = inputNueva ? inputNueva.value : "";
+    var repetirPassword = inputRepetir ? inputRepetir.value : "";
+
+    if (nuevaPassword.length < LARGO_MINIMO_PASSWORD) {
+      mostrarMensajeCuenta(container, "La contraseña debe tener al menos " + LARGO_MINIMO_PASSWORD + " caracteres.", "error");
+      return;
+    }
+    if (nuevaPassword !== repetirPassword) {
+      mostrarMensajeCuenta(container, "Las contraseñas no coinciden.", "error");
+      return;
+    }
+
+    estadoNuevaPassword.cargando = true;
+    boton.disabled = true;
+    boton.textContent = "Guardando...";
+    mostrarMensajeCuenta(container, "Actualizando contraseña...", "info");
+
+    actualizarPassword(nuevaPassword)
+      .then(function (resultado) {
+        estadoNuevaPassword.cargando = false;
+        if (resultado && resultado.error) {
+          boton.disabled = false;
+          boton.textContent = "Cambiar contraseña";
+          mostrarMensajeCuenta(container, "No se pudo actualizar la contraseña: " + resultado.error.message, "error");
+          return;
+        }
+        /* Éxito: se sale del estado de recuperación y se vuelve a la vista
+           normal de Cuenta, ya autenticada (updateUser no cierra la sesión).
+           Se reemplaza el contenido acá mismo (en vez de depender de un
+           re-render completo vía alCambiarEstado) para poder mostrar el
+           mensaje de éxito ya en la vista de "Conectado como...". */
+        enRecuperacion = false;
+        estadoCuenta.modo = "iniciar-sesion";
+        var email = sesionActual && sesionActual.user ? sesionActual.user.email : "";
+        var seccionCuenta = container.querySelector(".seccion-cuenta");
+        if (seccionCuenta) seccionCuenta.outerHTML = renderSeccionConectado(email);
+        mostrarMensajeCuenta(container, "Contraseña actualizada correctamente", "exito");
+      })
+      .catch(function (e) {
+        estadoNuevaPassword.cargando = false;
+        boton.disabled = false;
+        boton.textContent = "Cambiar contraseña";
+        console.error("Error de red al actualizar la contraseña", e);
+        mostrarMensajeCuenta(container, "Ocurrió un error de red al actualizar la contraseña. Probá de nuevo.", "error");
       });
   }
 
