@@ -121,6 +121,28 @@ body {
   border-color: var(--color-primario);
 }
 
+/* ONB-02: fecha de nacimiento con entrada manual DD/MM/AAAA + selector
+   nativo. Siempre apilados en columna, para no arriesgar overflow a
+   anchos chicos (320px). */
+.fecha-nacimiento-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ONB-02: mensaje de error específico de un campo (nombre, fecha de
+   nacimiento), separado del `.mensaje` genérico de las secciones de
+   Cuenta/Sincronización. */
+.campo-error-texto {
+  color: var(--color-error);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.campo-error-texto.oculto {
+  display: none;
+}
+
 .btn {
   display: block;
   width: 100%;
